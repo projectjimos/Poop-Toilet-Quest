@@ -1,0 +1,6 @@
+{
+  "name": "Poop Toilet Quest",
+  "description": "An arcade game where you start as a pile of poop, collect coins, unlock toilet upgrades, and play with friends in real-time co-op multiplayer to defeat sewer enemies with flush blasts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

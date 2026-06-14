@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a registered Poop Quest player with their progress and subscription choices.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Authentication user ID."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's registered email address."
+        },
+        "highScore": {
+          "type": "integer",
+          "description": "The user's high score in Solo play."
+        },
+        "coins": {
+          "type": "integer",
+          "description": "Total coins collected by the user."
+        },
+        "subbedTo": {
+          "type": "array",
+          "description": "List of creators or tiers the user is subscribed to.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unlockedToilets": {
+          "type": "array",
+          "description": "List of unlocked toilet ids.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "activeToiletId": {
+          "type": "string",
+          "description": "The currently active toilet ID."
+        },
+        "unlockedArmors": {
+          "type": "array",
+          "description": "List of unlocked armor ids.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "activeArmorId": {
+          "type": "string",
+          "description": "The currently active armor ID."
+        },
+        "poopLevel": {
+          "type": "integer",
+          "description": "The current player's poop level tier."
+        },
+        "suitLevel": {
+          "type": "integer",
+          "description": "The current player's suit level tier."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "highScore",
+        "coins",
+        "subbedTo",
+        "unlockedToilets",
+        "activeToiletId",
+        "unlockedArmors",
+        "activeArmorId",
+        "poopLevel",
+        "suitLevel",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "The user document containing stats and subscription list, secured so only the specific user can read and write."
+    }
+  }
+}

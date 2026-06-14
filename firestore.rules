@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net - Default Deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- ENTITY VALIDATION HELPERS ---
+    function isValidUser(data) {
+      return data.uid is string && data.uid == request.auth.uid
+          && data.email is string && data.email.size() >= 3 && data.email.size() <= 256
+          && data.highScore is int && data.highScore >= 0 && data.highScore <= 1000000000
+          && data.coins is int && data.coins >= 0 && data.coins <= 1000000000
+          && data.subbedTo is list && data.subbedTo.size() <= 50
+          && (data.subbedTo.size() == 0 || (data.subbedTo.size() > 0 && data.subbedTo[0] is string))
+          && data.unlockedToilets is list && data.unlockedToilets.size() <= 50
+          && (data.unlockedToilets.size() == 0 || (data.unlockedToilets.size() > 0 && data.unlockedToilets[0] is string))
+          && data.activeToiletId is string && data.activeToiletId.size() <= 64
+          && data.unlockedArmors is list && data.unlockedArmors.size() <= 50
+          && (data.unlockedArmors.size() == 0 || (data.unlockedArmors.size() > 0 && data.unlockedArmors[0] is string))
+          && data.activeArmorId is string && data.activeArmorId.size() <= 64
+          && data.poopLevel is int && data.poopLevel >= 1 && data.poopLevel <= 1000
+          && data.suitLevel is int && data.suitLevel >= 1 && data.suitLevel <= 1000
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
+    // --- MATCH BLOCKS ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      
+      allow create: if isOwner(userId) && isValidId(userId)
+          && isValidUser(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && incoming().keys().hasAll([
+            'uid', 'email', 'highScore', 'coins', 'subbedTo', 
+            'unlockedToilets', 'activeToiletId', 'unlockedArmors', 'activeArmorId', 
+            'poopLevel', 'suitLevel', 'createdAt', 'updatedAt'
+          ])
+          && incoming().keys().size() == 13;
+
+      allow update: if isOwner(userId) && isValidId(userId)
+          && isValidUser(incoming())
+          && incoming().uid == existing().uid
+          && incoming().email == existing().email
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'highScore', 'coins', 'subbedTo', 'unlockedToilets', 'activeToiletId', 
+            'unlockedArmors', 'activeArmorId', 'poopLevel', 'suitLevel', 'updatedAt'
+          ]);
+
+      allow delete: if false; // Users cannot delete their accounts directly from the client SDK
+    }
+  }
+}
