@@ -1,20 +1,19 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Poop Toilet Quest
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/644a8bd5-144b-42fc-97b2-206d9d42fa9f
+A fast, silly arcade game where players dodge enemies, flush with power, collect coins, manage water, reveal unknown toilets, and level up.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Add required environment variables in `.env.local`.
 3. Run the app:
    `npm run dev`
+
+## Deployment
+
+This repository deploys from the `main` branch through GitHub Actions.
+
+_Last deployment trigger: 2026-06-15._
