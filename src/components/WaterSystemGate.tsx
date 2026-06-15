@@ -14,6 +14,14 @@ type WrappedFlush = (() => void) & {
 
 type ResourceKind = 'water' | 'electricity';
 
+type UtilityPack = {
+  id: string;
+  label: string;
+  amount: number;
+  cost: number;
+  emoji: string;
+};
+
 type StatusTone = 'info' | 'warn' | 'success';
 
 type StatusMessage = {
@@ -25,17 +33,18 @@ type StatusMessage = {
 const STARTER_WATER = 500;
 const STARTER_ELECTRICITY = 500;
 const UTILITY_EVENT = 'ptq:utilities-updated';
+const COINS_EVENT = 'ptq:coins-updated';
 const LOW_WATER_WARNING_AT = 120;
 const LOW_ELECTRICITY_WARNING_AT = 120;
 
-const WATER_PACKS = [
+const WATER_PACKS: UtilityPack[] = [
   { id: 'cup', label: 'Cup Refill', amount: 100, cost: 5, emoji: '🥤' },
   { id: 'bucket', label: 'Bucket Refill', amount: 500, cost: 20, emoji: '🪣' },
   { id: 'tank', label: 'Tank Refill', amount: 2000, cost: 70, emoji: '🚰' },
   { id: 'reservoir', label: 'Sewer Reservoir', amount: 10000, cost: 250, emoji: '🌊' }
 ];
 
-const ELECTRICITY_PACKS = [
+const ELECTRICITY_PACKS: UtilityPack[] = [
   { id: 'spark', label: 'Spark Battery', amount: 100, cost: 5, emoji: '🔋' },
   { id: 'battery', label: 'Battery Pack', amount: 500, cost: 20, emoji: '⚡' },
   { id: 'cell', label: 'Power Cell', amount: 2000, cost: 70, emoji: '💡' },
@@ -77,6 +86,29 @@ function writeResource(profile: string, kind: ResourceKind, amount: number): num
   const safeAmount = Math.max(0, Math.floor(amount));
   localStorage.setItem(resourceKey(profile, kind), String(safeAmount));
   window.dispatchEvent(new CustomEvent(UTILITY_EVENT, { detail: { profile, kind, amount: safeAmount } }));
+  return safeAmount;
+}
+
+function writeCoins(profile: string, amount: number): number {
+  const safeAmount = Math.max(0, Math.floor(amount));
+  const key = coinsKey(profile);
+  const oldValue = localStorage.getItem(key);
+
+  localStorage.setItem(key, String(safeAmount));
+  window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: { profile, amount: safeAmount, oldValue } }));
+
+  try {
+    window.dispatchEvent(new StorageEvent('storage', {
+      key,
+      oldValue,
+      newValue: String(safeAmount),
+      storageArea: localStorage,
+      url: window.location.href
+    }));
+  } catch {
+    // Some browsers restrict synthetic StorageEvent construction. The custom event above is the primary signal.
+  }
+
   return safeAmount;
 }
 
@@ -175,11 +207,14 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
     syncProfileAndResources();
     const interval = window.setInterval(syncProfileAndResources, 750);
     const onUtilityUpdate = () => syncProfileAndResources();
+    const onCoinsUpdate = () => syncProfileAndResources();
     window.addEventListener(UTILITY_EVENT, onUtilityUpdate);
+    window.addEventListener(COINS_EVENT, onCoinsUpdate);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener(UTILITY_EVENT, onUtilityUpdate);
+      window.removeEventListener(COINS_EVENT, onCoinsUpdate);
     };
   }, []);
 
@@ -243,7 +278,7 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
     return () => window.clearInterval(interval);
   }, []);
 
-  const buyResource = (kind: ResourceKind, pack: typeof WATER_PACKS[number]) => {
+  const buyResource = (kind: ResourceKind, pack: UtilityPack) => {
     if (!profile) return;
 
     const currentCoins = readNumber(coinsKey(profile), coinsMirror);
@@ -255,7 +290,8 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
     const nextCoins = Math.max(0, currentCoins - pack.cost);
     const currentAmount = readNumber(resourceKey(profile, kind), kind === 'water' ? STARTER_WATER : STARTER_ELECTRICITY);
     const nextAmount = currentAmount + pack.amount;
-    localStorage.setItem(coinsKey(profile), String(nextCoins));
+
+    writeCoins(profile, nextCoins);
     writeResource(profile, kind, nextAmount);
     setCoinsMirror(nextCoins);
 
@@ -265,7 +301,7 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
       setElectricity(nextAmount);
     }
 
-    setStatus(makeStatusMessage(`${pack.emoji} Bought ${pack.amount.toLocaleString()} ${kind} for ${pack.cost} coins.`, 'success'));
+    setStatus(makeStatusMessage(`${pack.emoji} Bought ${pack.amount.toLocaleString()} ${kind} for ${pack.cost} coins. Coins left: ${nextCoins.toLocaleString()}.`, 'success'));
   };
 
   const currentPacks = openShop === 'electricity' ? ELECTRICITY_PACKS : WATER_PACKS;
@@ -289,22 +325,27 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
                   </div>
                 </div>
 
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setOpenShop((prev) => (prev === 'water' ? null : 'water'))}
-                    className="px-3 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-[10px] font-black uppercase tracking-wide transition-colors"
-                  >
-                    Water
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOpenShop((prev) => (prev === 'electricity' ? null : 'electricity'))}
-                    className="px-3 py-2 rounded-xl bg-yellow-300 hover:bg-yellow-200 text-slate-950 text-[10px] font-black uppercase tracking-wide transition-colors"
-                  >
-                    Power
-                  </button>
+                <div className="shrink-0 text-right rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2">
+                  <div className="text-[9px] uppercase tracking-wider text-amber-200 font-black">Money</div>
+                  <div className="text-sm text-amber-100 font-black">🪙 {coinsMirror.toLocaleString()}</div>
                 </div>
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenShop((prev) => (prev === 'water' ? null : 'water'))}
+                  className="flex-1 px-3 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-[10px] font-black uppercase tracking-wide transition-colors"
+                >
+                  Buy Water
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenShop((prev) => (prev === 'electricity' ? null : 'electricity'))}
+                  className="flex-1 px-3 py-2 rounded-xl bg-yellow-300 hover:bg-yellow-200 text-slate-950 text-[10px] font-black uppercase tracking-wide transition-colors"
+                >
+                  Buy Power
+                </button>
               </div>
             </div>
 
@@ -361,27 +402,40 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
               <div className="px-4 pb-4 grid grid-cols-1 gap-2">
                 <div className="text-[9px] uppercase tracking-widest text-slate-500 font-black flex items-center justify-between">
                   <span>{openShopLabel}</span>
-                  <span>Detected coins: {coinsMirror.toLocaleString()}</span>
+                  <span>Money: {coinsMirror.toLocaleString()} coins</span>
                 </div>
-                {currentPacks.map((pack) => (
-                  <button
-                    key={pack.id}
-                    type="button"
-                    onClick={() => buyResource(openShop, pack)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/40 transition-colors flex items-center justify-between gap-3 text-left"
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="text-lg">{pack.emoji}</span>
-                      <span className="min-w-0">
-                        <span className="block text-xs text-white font-black truncate">{pack.label}</span>
-                        <span className="block text-[10px] text-cyan-300 font-bold">+{pack.amount.toLocaleString()} {openShopUnit}</span>
+                {currentPacks.map((pack) => {
+                  const canAfford = coinsMirror >= pack.cost;
+                  const balanceAfterPurchase = Math.max(0, coinsMirror - pack.cost);
+
+                  return (
+                    <button
+                      key={pack.id}
+                      type="button"
+                      onClick={() => buyResource(openShop, pack)}
+                      disabled={!canAfford}
+                      className={`w-full px-3 py-2 rounded-xl border transition-colors flex items-center justify-between gap-3 text-left ${
+                        canAfford
+                          ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 hover:border-cyan-400/40'
+                          : 'bg-slate-950/80 border-slate-900 opacity-60 cursor-not-allowed'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">{pack.emoji}</span>
+                        <span className="min-w-0">
+                          <span className="block text-xs text-white font-black truncate">{pack.label}</span>
+                          <span className="block text-[10px] text-cyan-300 font-bold">+{pack.amount.toLocaleString()} {openShopUnit}</span>
+                          <span className="block text-[9px] text-slate-500 font-bold">
+                            Balance after buy: {balanceAfterPurchase.toLocaleString()} coins
+                          </span>
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-[11px] text-amber-300 font-black">{pack.cost} coins</span>
-                  </button>
-                ))}
+                      <span className="shrink-0 text-[11px] text-amber-300 font-black">-{pack.cost} coins</span>
+                    </button>
+                  );
+                })}
                 <p className="text-[9px] text-slate-500 leading-relaxed">
-                  New players get 500 starter water and 500 starter electricity. Stronger toilets stay powerful, but every flush now needs utility planning.
+                  Buying utilities now deducts coins immediately and shows your updated money balance so there is no confusion.
                 </p>
               </div>
             )}
