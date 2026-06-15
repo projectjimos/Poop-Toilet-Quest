@@ -104,12 +104,7 @@ export default function IntroCinematic({ children }: IntroCinematicProps) {
       <div className="intro-bg-glow intro-bg-glow-cyan" aria-hidden="true" />
       <div className="intro-bg-comets" aria-hidden="true" />
 
-      <button
-        type="button"
-        onClick={finishIntro}
-        className="intro-skip-button"
-        aria-label="Skip intro and enter the game"
-      >
+      <button type="button" onClick={finishIntro} className="intro-skip-button" aria-label="Skip intro and enter the game">
         <FastForward className="w-3.5 h-3.5" /> Skip
       </button>
 
@@ -118,15 +113,15 @@ export default function IntroCinematic({ children }: IntroCinematicProps) {
           <div className="intro-scene-wrap order-2 lg:order-1" aria-hidden="true">
             <div className="intro-scene">
               <div className="intro-floor" />
-              <div className="intro-boss intro-boss-plunger"><span className="intro-boss-emoji">🪠</span><span className="intro-boss-label">PLUNGER TITAN</span></div>
-              <div className="intro-boss intro-boss-germ"><span className="intro-boss-emoji">🦠</span><span className="intro-boss-label">GERM KING</span></div>
-              <div className="intro-boss intro-boss-paper"><span className="intro-boss-emoji">🧻</span><span className="intro-boss-label">PAPER BEAST</span></div>
+              <div className="intro-villain intro-villain-plunger"><span className="intro-villain-emoji">🪠</span><span className="intro-villain-label">PLUNGER TITAN</span></div>
+              <div className="intro-villain intro-villain-germ"><span className="intro-villain-emoji">🦠</span><span className="intro-villain-label">GERM KING</span></div>
+              <div className="intro-villain intro-villain-paper"><span className="intro-villain-emoji">🧻</span><span className="intro-villain-label">PAPER BEAST</span></div>
               <div className="intro-magic-beam intro-magic-beam-one" />
               <div className="intro-magic-beam intro-magic-beam-two" />
               <div className="intro-magic-beam intro-magic-beam-three" />
-              <div className="intro-blast-ring intro-blast-ring-one" />
-              <div className="intro-blast-ring intro-blast-ring-two" />
-              <div className="intro-blast-ring intro-blast-ring-three" />
+              <div className="intro-wave-ring intro-wave-ring-one" />
+              <div className="intro-wave-ring intro-wave-ring-two" />
+              <div className="intro-wave-ring intro-wave-ring-three" />
               <div className="intro-hero-mage">
                 <div className="intro-hero-aura" />
                 <div className="intro-hero-shadow" />
