@@ -88,6 +88,10 @@ function makeStatusMessage(text: string, tone: 'info' | 'warn' | 'success' = 'in
 
 export default function WaterSystemGate({ children }: WaterSystemGateProps) {
   const [profile, setProfile] = useState<string | null>(() => getActiveProfile());
+  const [activeToiletId, setActiveToiletId] = useState<string>(() => {
+    const activeProfile = getActiveProfile();
+    return activeProfile ? localStorage.getItem(activeToiletKey(activeProfile)) || 'porta_potty' : 'porta_potty';
+  });
   const [water, setWater] = useState<number>(() => {
     const activeProfile = getActiveProfile();
     return activeProfile ? ensureStarterWater(activeProfile) : STARTER_WATER;
@@ -100,7 +104,9 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
   const [status, setStatus] = useState<{ text: string; tone: 'info' | 'warn' | 'success'; id: number } | null>(null);
   const localCooldownUntilRef = useRef<Record<string, number>>({});
 
-  const activeToilet = useMemo(() => getActiveToilet(profile), [profile, water, coinsMirror]);
+  const activeToilet = useMemo(() => {
+    return TOILET_CATALOG.find((toilet) => toilet.id === activeToiletId) || getActiveToilet(profile);
+  }, [activeToiletId, profile]);
   const activeFlushCost = useMemo(() => getWaterCost(activeToilet), [activeToilet]);
   const waterLow = water <= Math.max(LOW_WATER_WARNING_AT, activeFlushCost * 3);
 
@@ -111,8 +117,10 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
 
       if (nextProfile) {
         const nextWater = ensureStarterWater(nextProfile);
+        const nextActiveToiletId = localStorage.getItem(activeToiletKey(nextProfile)) || 'porta_potty';
         setWater(nextWater);
         setCoinsMirror(readNumber(coinsKey(nextProfile), 0));
+        setActiveToiletId((prev) => (prev === nextActiveToiletId ? prev : nextActiveToiletId));
       }
     };
 
@@ -201,7 +209,7 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
 
       {profile && (
         <div className="fixed bottom-4 right-4 z-[70] w-[min(92vw,360px)] font-mono pointer-events-none">
-          <div className="pointer-events-auto bg-slate-950/92 border border-cyan-400/30 shadow-2xl shadow-cyan-950/40 rounded-2xl overflow-hidden backdrop-blur-md">
+          <div className="pointer-events-auto bg-slate-950/95 border border-cyan-400/30 shadow-2xl shadow-cyan-950/40 rounded-2xl overflow-hidden backdrop-blur-md">
             <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-800 bg-gradient-to-r from-cyan-950/70 via-slate-950 to-blue-950/50">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-2xl animate-pulse">💧</span>
@@ -257,7 +265,7 @@ export default function WaterSystemGate({ children }: WaterSystemGateProps) {
               <div className="px-4 pb-4 grid grid-cols-1 gap-2">
                 <div className="text-[9px] uppercase tracking-widest text-slate-500 font-black flex items-center justify-between">
                   <span>Cheap Refills</span>
-                  <span>Coin mirror: {coinsMirror.toLocaleString()}</span>
+                  <span>Detected coins: {coinsMirror.toLocaleString()}</span>
                 </div>
                 {WATER_PACKS.map((pack) => (
                   <button
