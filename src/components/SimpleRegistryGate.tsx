@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, Play, Sparkles, User } from 'lucide-react';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
+import { CheckCircle2, Loader2, Play, Sparkles } from 'lucide-react';
 import { getCookie, setCookie } from '../utils/cookies';
+import { auth } from '../utils/firebase';
 
 const COOKIE_CONSENT_KEY = 'poop_quest_cookie_consent';
 const CURRENT_USER_KEY = 'poop_quest_current_user';
@@ -23,14 +25,27 @@ const readProfilesList = () => {
 };
 
 export default function SimpleRegistryGate({ children }: { children: ReactNode }) {
-  const [showRegistry, setShowRegistry] = useState(() => hasCookieConsent() && !getStoredPlayer());
+  const [showRegistry, setShowRegistry] = useState(() => hasCookieConsent() && !getStoredPlayer() && !auth.currentUser);
   const [sessionKey, setSessionKey] = useState(0);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [firebasePlayerEmail, setFirebasePlayerEmail] = useState<string | null>(() => auth.currentUser?.email ?? null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebasePlayerEmail(user?.email ?? null);
+      if (user) {
+        setIsGoogleLoading(false);
+        setStatusMessage(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const refreshRegistryState = () => {
-      setShowRegistry(hasCookieConsent() && !getStoredPlayer());
+      setShowRegistry(hasCookieConsent() && !getStoredPlayer() && !firebasePlayerEmail);
     };
 
     refreshRegistryState();
@@ -43,7 +58,7 @@ export default function SimpleRegistryGate({ children }: { children: ReactNode }
       window.removeEventListener('storage', refreshRegistryState);
       window.removeEventListener('focus', refreshRegistryState);
     };
-  }, []);
+  }, [firebasePlayerEmail]);
 
   const handleGuestPlay = () => {
     const profiles = readProfilesList();
@@ -66,35 +81,26 @@ export default function SimpleRegistryGate({ children }: { children: ReactNode }
       setIsGoogleLoading(true);
       setStatusMessage('Opening Google sign-in...');
 
-      const response = await fetch(`/api/auth/url?origin=${encodeURIComponent(window.location.origin)}`);
-      if (!response.ok) {
-        throw new Error('Google sign-in is not available from this deployment yet.');
-      }
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
 
-      const data = await response.json();
-      if (!data?.url) {
-        throw new Error('Google sign-in did not return a login URL.');
-      }
-
-      const width = 500;
-      const height = 650;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      const popup = window.open(
-        data.url,
-        'Google_OAuth_Sign_In',
-        `width=${width},height=${height},left=${left},top=${top},status=yes,resizable=yes`
-      );
-
-      if (!popup) {
-        throw new Error('Popup blocked. Allow popups for this site, then try Google again.');
-      }
-
-      setStatusMessage('Finish Google sign-in in the popup. Your cloud save will load after that.');
+      setStatusMessage('Google save connected. Loading your quest...');
+      setShowRegistry(false);
+      setSessionKey((key) => key + 1);
+      import('../utils/audio').then((module) => module.playUnlockSound()).catch(() => undefined);
     } catch (error: any) {
-      setStatusMessage(error?.message || 'Google sign-in could not start.');
+      const code = error?.code || '';
+      const isPopupClosed = code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request';
+      setStatusMessage(
+        isPopupClosed
+          ? 'Google sign-in was closed. Choose Google again or play as guest.'
+          : error?.message || 'Google sign-in could not start.'
+      );
       setIsGoogleLoading(false);
-      import('../utils/audio').then((module) => module.playDamageSound()).catch(() => undefined);
+      if (!isPopupClosed) {
+        import('../utils/audio').then((module) => module.playDamageSound()).catch(() => undefined);
+      }
     }
   };
 
@@ -179,7 +185,7 @@ export default function SimpleRegistryGate({ children }: { children: ReactNode }
 
           <div className="relative mt-6 grid grid-cols-3 gap-2 text-center text-[10px] font-black uppercase tracking-wide text-slate-400">
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2">
-              <ZapIcon /> React fast
+              <span aria-hidden="true">⚡</span> React fast
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2">
               🪙 Collect coins
@@ -198,8 +204,4 @@ export default function SimpleRegistryGate({ children }: { children: ReactNode }
       </div>
     </>
   );
-}
-
-function ZapIcon() {
-  return <span aria-hidden="true">⚡</span>;
 }
