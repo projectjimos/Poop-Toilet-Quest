@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../utils/firebase';
 import { getCookie } from '../utils/cookies';
@@ -75,11 +75,18 @@ const getTutorialStorageKey = (profileName: string) => {
   return `poop_quest_tutorial_seen_${encodeURIComponent(profileName.toLowerCase())}`;
 };
 
+const playProfileCinematic = () => {
+  window.dispatchEvent(new CustomEvent('ptq:play-intro-cinematic', {
+    detail: { reason: 'profile-ready' }
+  }));
+};
+
 export default function FirstRunTutorialGate({ children }: FirstRunTutorialGateProps) {
   const [cloudUserName, setCloudUserName] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const lastProfileCinematicRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -96,8 +103,17 @@ export default function FirstRunTutorialGate({ children }: FirstRunTutorialGateP
       setProfileName(detectedProfile);
 
       if (!cookiesAccepted || !detectedProfile) {
+        if (!detectedProfile) {
+          lastProfileCinematicRef.current = null;
+        }
         setIsVisible(false);
         return;
+      }
+
+      const normalizedProfileName = detectedProfile.toLowerCase();
+      if (lastProfileCinematicRef.current !== normalizedProfileName) {
+        lastProfileCinematicRef.current = normalizedProfileName;
+        playProfileCinematic();
       }
 
       const tutorialSeen = localStorage.getItem(getTutorialStorageKey(detectedProfile)) === 'true';
