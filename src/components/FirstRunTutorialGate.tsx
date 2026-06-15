@@ -39,6 +39,17 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     ]
   },
   {
+    eyebrow: 'Utilities',
+    title: 'Water and electricity power every flush.',
+    emoji: '💧',
+    body: 'Your toilet now needs both water and electricity. New players start with 500 of each, but stronger toilets use more, so OP toilets stay powerful without becoming mindless spam machines.',
+    bullets: [
+      'If either resource is too low, your toilet will not fire until you refill.',
+      'Buy cheap water or power refills with coins from the utility panel.',
+      'Use big toilets at the right moment so you do not waste resources before a boss wave.'
+    ]
+  },
+  {
     eyebrow: 'The money loop',
     title: 'Coins turn into unknown toilets.',
     emoji: '🪙',
@@ -194,7 +205,7 @@ export default function FirstRunTutorialGate({ children }: FirstRunTutorialGateP
                   </p>
                 </div>
 
-                <div className="mt-5 grid grid-cols-4 gap-2" aria-label="Tutorial progress">
+                <div className="mt-5 grid gap-2" style={{ gridTemplateColumns: `repeat(${TUTORIAL_STEPS.length}, minmax(0, 1fr))` }} aria-label="Tutorial progress">
                   {TUTORIAL_STEPS.map((step, index) => (
                     <button
                       key={step.title}
@@ -233,7 +244,7 @@ export default function FirstRunTutorialGate({ children }: FirstRunTutorialGateP
                 <div className="mt-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
                   <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300">Remember</div>
                   <div className="mt-1 text-sm font-bold text-white">
-                    Dodge → Flush → Grab Coins → Buy Unknown Toilets → Equip or Sell → Level Up
+                    Dodge → Flush → Manage Water/Power → Grab Coins → Buy Unknown Toilets → Equip or Sell → Level Up
                   </div>
                 </div>
 
