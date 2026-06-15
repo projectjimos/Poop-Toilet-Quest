@@ -1,4 +1,5 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Music2 } from 'lucide-react';
 
 type CowbandSoundtrackGateProps = {
@@ -42,27 +43,29 @@ export default function CowbandSoundtrackGate({ children }: CowbandSoundtrackGat
             aria-expanded={isOpen}
             aria-controls="cowband-youtube-player"
           >
-            {isOpen ? 'Hide' : 'Music'}
+            {isOpen ? 'Hide' : 'Show'}
           </button>
         </div>
 
-        {isOpen && (
-          <div id="cowband-youtube-player" className="p-3">
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-black">
-              <iframe
-                className="aspect-video w-full"
-                src={EMBED_URL}
-                title="Cowband soundtrack by Cowguy55"
-                allow="encrypted-media; picture-in-picture"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
-            </div>
-            <p className="mt-3 text-[11px] font-semibold leading-snug text-slate-400">
-              Press play in the player to use Cowguy55's Cowband music during the intro and game.
-            </p>
+        <div
+          id="cowband-youtube-player"
+          className={isOpen ? 'p-3' : 'h-0 overflow-hidden p-0 opacity-0'}
+          aria-hidden={!isOpen}
+        >
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-black">
+            <iframe
+              className="aspect-video w-full"
+              src={EMBED_URL}
+              title="Cowband soundtrack by Cowguy55"
+              allow="encrypted-media; picture-in-picture"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
           </div>
-        )}
+          <p className="mt-3 text-[11px] font-semibold leading-snug text-slate-400">
+            Press play in the player to use Cowguy55's Cowband music during the intro and game. Hide keeps the soundtrack running.
+          </p>
+        </div>
       </aside>
     </>
   );
