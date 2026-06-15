@@ -19,6 +19,61 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
+function playTone(
+  ctx: AudioContext,
+  frequency: number,
+  startTime: number,
+  duration: number,
+  volume: number = 0.08,
+  type: OscillatorType = 'sine',
+  destination: AudioNode = ctx.destination
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, startTime);
+
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.linearRampToValueAtTime(volume, startTime + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+  osc.connect(gain);
+  gain.connect(destination);
+
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
+
+function playNoiseBurst(ctx: AudioContext, startTime: number, duration: number, volume: number, filterFrequency: number) {
+  const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  const noise = ctx.createBufferSource();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+
+  noise.buffer = buffer;
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(filterFrequency, startTime);
+  filter.Q.setValueAtTime(5, startTime);
+
+  gain.gain.setValueAtTime(volume, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+
+  noise.start(startTime);
+  noise.stop(startTime + duration + 0.02);
+}
+
 export function setMuteState(muted: boolean) {
   isMuted = muted;
   if (muted && audioCtx) {
@@ -192,5 +247,75 @@ export function playUnlockSound() {
 
     osc.start(now);
     osc.stop(now + idx * 0.08 + 0.35);
+  });
+}
+
+export function playCoinStreakSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const notes = [784, 988, 1175, 1480, 1760];
+  notes.forEach((freq, idx) => {
+    playTone(ctx, freq, now + idx * 0.055, 0.16, 0.075, idx % 2 === 0 ? 'triangle' : 'sine');
+  });
+}
+
+export function playPerfectFlushSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const chord = [196, 261.63, 329.63, 392, 523.25, 659.25];
+  chord.forEach((freq, idx) => {
+    playTone(ctx, freq, now + idx * 0.018, 0.48, idx < 2 ? 0.07 : 0.052, idx < 2 ? 'triangle' : 'sine');
+  });
+  playNoiseBurst(ctx, now + 0.04, 0.22, 0.05, 1800);
+}
+
+export function playNewToiletRevealSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  for (let i = 0; i < 7; i++) {
+    playNoiseBurst(ctx, now + i * 0.065, 0.045, 0.035, 700 + i * 250);
+    playTone(ctx, 140 + i * 28, now + i * 0.065, 0.05, 0.045, 'square');
+  }
+
+  [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+    playTone(ctx, freq, now + 0.48 + idx * 0.07, 0.38, 0.07, 'sine');
+  });
+}
+
+export function playBossAppearsSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  [110, 82.41, 110, 73.42].forEach((freq, idx) => {
+    playTone(ctx, freq, now + idx * 0.18, 0.16, 0.11, 'sawtooth');
+  });
+  playNoiseBurst(ctx, now + 0.03, 0.55, 0.04, 420);
+}
+
+export function playLowHpHeartbeatSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  [0, 0.22].forEach((offset, idx) => {
+    playTone(ctx, idx === 0 ? 72 : 58, now + offset, 0.13, idx === 0 ? 0.13 : 0.09, 'sine');
+  });
+}
+
+export function playWaveCompleteSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const notes = [392, 523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((freq, idx) => {
+    playTone(ctx, freq, now + idx * 0.09, 0.24, 0.07, idx % 2 === 0 ? 'triangle' : 'sine');
   });
 }
