@@ -1,4 +1,5 @@
-import { ReactNode, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
 import { CheckCircle2, Loader2, Play, Sparkles } from 'lucide-react';
 import { getCookie, setCookie } from '../utils/cookies';
