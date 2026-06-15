@@ -393,6 +393,14 @@ export default function App() {
     }
   };
 
+  const handleSellToilet = (id: string, cost: number) => {
+    if (unlockedToilets.includes(id) && activeToiletId !== id) {
+      const refund = Math.floor(cost * 0.9);
+      setCoins(prev => prev + refund);
+      setUnlockedToilets(prev => prev.filter(t => t !== id));
+    }
+  };
+
   const handleApplyPromoCode = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -1343,6 +1351,7 @@ export default function App() {
                 unlockedToilets={unlockedToilets}
                 setUnlockedToilets={setUnlockedToilets}
                 unlockToilet={handleUnlockToilet}
+                sellToilet={handleSellToilet}
                 activeToilet={activeToilet}
                 setActiveToilet={(toilet) => setActiveToiletId(toilet.id)}
                 setActiveToiletId={setActiveToiletId}

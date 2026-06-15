@@ -11,6 +11,7 @@ interface GameAreaProps {
   unlockedToilets: string[];
   setUnlockedToilets: (val: string[] | ((prev: string[]) => string[])) => void;
   unlockToilet: (id: string, cost: number) => void;
+  sellToilet: (id: string, cost: number) => void;
   activeToilet: Toilet;
   setActiveToilet: (toilet: Toilet) => void;
   setActiveToiletId: (id: string) => void;
@@ -35,6 +36,7 @@ export default function GameArea({
   unlockedToilets,
   setUnlockedToilets,
   unlockToilet,
+  sellToilet,
   activeToilet,
   setActiveToilet,
   setActiveToiletId,
@@ -4038,15 +4040,29 @@ export default function GameArea({
                               <Check className="w-2.5 h-2.5" /> Equipped
                             </span>
                           ) : isUnlocked ? (
-                            <button
-                              onClick={() => {
-                                setActiveToilet(toilet);
-                                playUnlockSound();
-                              }}
-                              className="px-2.5 py-1 text-[10px] font-mono font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-all duration-150 border border-slate-700 active:scale-95"
-                            >
-                              Equip
-                            </button>
+                            <div className="flex flex-col items-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setActiveToilet(toilet);
+                                  playUnlockSound();
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-mono font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-all duration-150 border border-slate-700 active:scale-95"
+                              >
+                                Equip
+                              </button>
+                              {toilet.cost > 0 && (
+                                <button
+                                  onClick={() => {
+                                    sellToilet(toilet.id, toilet.cost);
+                                    playCoinSound();
+                                  }}
+                                  className="px-2 py-0.5 text-[9px] font-mono font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded border border-rose-500/35 transition-all duration-150 active:scale-95 cursor-pointer"
+                                  title="Sell for 90% of original cost"
+                                >
+                                  Sell: 🪙{Math.floor(toilet.cost * 0.9)}
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <button
                               disabled={!canAfford}
