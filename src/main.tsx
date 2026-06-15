@@ -6,6 +6,7 @@ import IntroCinematic from './components/IntroCinematic.tsx';
 import JuiceLayerGate from './components/JuiceLayerGate.tsx';
 import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import WaterSystemGate from './components/WaterSystemGate.tsx';
+import './components/CowbandSoundtrackGate.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
