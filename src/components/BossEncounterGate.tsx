@@ -65,7 +65,6 @@ type WaveRuntime = {
   bossDefeated?: boolean;
 };
 
-const WAVE_LABEL_PATTERN = /Poop Crusader\s*Level\s*(\d+)/i;
 const WAVE_RUNTIME_KEY = '__ptqWaveClearRuntime';
 const UTILITY_EVENT = 'ptq:utilities-updated';
 const COINS_EVENT = 'ptq:coins-updated';
@@ -73,57 +72,33 @@ const BOSS_DEFEATED_EVENT = 'ptq:boss-defeated';
 const PLAYER_TARGET: Point = { x: 50, y: 54 };
 const CLOSE_RANGE = 36;
 const HIT_RANGE_BONUS = 24;
-const BASE_ABILITY_COOLDOWN_MS = 4300;
 const BOSS_NAMES = ['Crowned Bacteria King', 'Royal Germ Emperor', 'Sewer Microbe Monarch', 'Toxic Crown Germ', 'Galactic Bacteria Overlord'];
-const ABILITY_BASES: Array<Omit<Ability, 'id' | 'name' | 'weight'>> = [
-  { emoji: '🦠', kind: 'replica' },
-  { emoji: '🟣', kind: 'spark' },
-  { emoji: '😡', kind: 'rush' },
-  { emoji: '🌀', kind: 'zone' },
-  { emoji: '👑', kind: 'shield' }
+
+const ABILITY_LIBRARY: Ability[] = [
+  { id: 'replica-1', name: 'Mini Bacteria Replica', emoji: '🦠', kind: 'replica', weight: 1 },
+  { id: 'spark-1', name: 'Spore Spark Volley', emoji: '🟣', kind: 'spark', weight: 1.1 },
+  { id: 'rush-1', name: 'Royal Rush', emoji: '😡', kind: 'rush', weight: 1.2 },
+  { id: 'zone-1', name: 'Arena Zone Pulse', emoji: '🌀', kind: 'zone', weight: 1.25 },
+  { id: 'shield-1', name: 'Crown Shield Pulse', emoji: '👑', kind: 'shield', weight: 1.35 },
+  { id: 'replica-2', name: 'Replica Swarm', emoji: '🦠', kind: 'replica', weight: 1.45 },
+  { id: 'spark-2', name: 'Wide Spark Volley', emoji: '✨', kind: 'spark', weight: 1.55 },
+  { id: 'zone-2', name: 'Royal Zone Burst', emoji: '🔆', kind: 'zone', weight: 1.65 }
 ];
 
-const ABILITY_LIBRARY: Ability[] = Array.from({ length: 120 }, (_, index) => {
-  const base = ABILITY_BASES[index % ABILITY_BASES.length];
-  const tier = Math.floor(index / ABILITY_BASES.length) + 1;
-  const name = {
-    replica: 'Mini Bacteria Replica',
-    spark: 'Spore Spark Volley',
-    rush: 'Royal Rush',
-    zone: 'Arena Zone Pulse',
-    shield: 'Crown Shield Pulse'
-  }[base.kind];
-  return { ...base, id: `${base.kind}-${tier}`, name: `${name} ${tier}`, weight: 1 + tier * 0.035 };
-});
+const isMobileLike = () => window.matchMedia?.('(pointer: coarse), (max-width: 760px)').matches ?? false;
 
 function getWaveRuntime(): WaveRuntime | null {
   return ((window as unknown as Record<string, WaveRuntime | undefined>)[WAVE_RUNTIME_KEY]) || null;
 }
 
-function getDirectorWave(): number | null {
+function getActiveWave(): number | null {
   const runtime = getWaveRuntime();
   const wave = runtime?.currentWave;
   return runtime?.active && Number.isFinite(wave) && wave! > 0 ? wave! : null;
 }
 
-function getVisibleWave(): number | null {
-  const text = document.body?.innerText || '';
-  const match = text.match(WAVE_LABEL_PATTERN);
-  if (!match) return null;
-  const parsed = Number.parseInt(match[1], 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function getActiveWave(): number | null {
-  return getDirectorWave() || getVisibleWave();
-}
-
 function isGameActivelyPlaying(): boolean {
-  const text = document.body?.innerText || '';
-  const isLobby = /SELECT INPUT SYSTEM|Start PC Play|Start Mobile Play|Start CO-OP Play/i.test(text);
-  const isGameOver = /GAME OVER|Try Again|Return to Lobby/i.test(text);
-  const hasWaveHud = WAVE_LABEL_PATTERN.test(text);
-  return hasWaveHud && !isLobby && !isGameOver;
+  return Boolean(getWaveRuntime()?.active);
 }
 
 function getActiveProfile(): string | null {
@@ -147,9 +122,7 @@ function electricityKey(profile: string): string {
 }
 
 function readNumber(key: string, fallback = 0): number {
-  const raw = localStorage.getItem(key);
-  if (raw === null) return fallback;
-  const parsed = Number.parseInt(raw, 10);
+  const parsed = Number.parseInt(localStorage.getItem(key) || '', 10);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
 }
 
@@ -174,8 +147,7 @@ function getWaterCost(toilet: Toilet): number {
 function getElectricityCost(toilet: Toilet): number {
   if (toilet.id === 'porta_potty') return 1;
   const fastFlushPressure = toilet.cooldownMs < 2500 ? 10 : toilet.cooldownMs < 3500 ? 6 : toilet.cooldownMs < 5000 ? 3 : 0;
-  const powerPressure = toilet.damage * 0.055 + toilet.flushRadius * 0.012;
-  const calculated = Math.round(toilet.level * 0.5 + powerPressure + fastFlushPressure);
+  const calculated = Math.round(toilet.level * 0.5 + toilet.damage * 0.055 + toilet.flushRadius * 0.012 + fastFlushPressure);
   return Math.min(95, Math.max(1, calculated));
 }
 
@@ -185,30 +157,30 @@ function distanceBetween(a: Point, b: Point = PLAYER_TARGET): number {
 
 function getSpawnPosition(wave: number): Point {
   const side = Math.floor(wave / 5) % 4;
-  if (side === 0) return { x: 9, y: 22 };
-  if (side === 1) return { x: 91, y: 23 };
-  if (side === 2) return { x: 88, y: 84 };
-  return { x: 11, y: 82 };
+  if (side === 0) return { x: 12, y: 24 };
+  if (side === 1) return { x: 88, y: 24 };
+  if (side === 2) return { x: 86, y: 82 };
+  return { x: 14, y: 82 };
 }
 
 function getAbilitySlots(wave: number): number {
-  return Math.min(14, Math.max(1, Math.floor(wave / 5)));
+  return Math.min(6, Math.max(1, Math.floor(wave / 5)));
 }
 
 function getAvailableAbilities(wave: number): Ability[] {
-  return ABILITY_LIBRARY.slice(0, Math.min(ABILITY_LIBRARY.length, getAbilitySlots(wave) * 10));
+  return ABILITY_LIBRARY.slice(0, Math.min(ABILITY_LIBRARY.length, getAbilitySlots(wave) + 1));
 }
 
 function makeBossForWave(wave: number): BossState {
   const abilitySlots = getAbilitySlots(wave);
-  const maxHp = 2100 + wave * 480 + abilitySlots * 650;
+  const maxHp = 1900 + wave * 380 + abilitySlots * 520;
   return {
     wave,
     name: BOSS_NAMES[Math.floor((wave / 5 - 1) % BOSS_NAMES.length)],
     hp: maxHp,
     maxHp,
-    rewardCoins: 320 + wave * 58 + abilitySlots * 180,
-    utilityCost: Math.min(360, 18 + wave * 4 + abilitySlots * 12),
+    rewardCoins: 280 + wave * 46 + abilitySlots * 135,
+    utilityCost: Math.min(260, 16 + wave * 3 + abilitySlots * 8),
     position: getSpawnPosition(wave),
     defeated: false
   };
@@ -216,16 +188,16 @@ function makeBossForWave(wave: number): BossState {
 
 function getFlushRange(toilet: Toilet): number {
   const base = toilet.flushRadius / 10 + HIT_RANGE_BONUS;
-  return Math.min(82, Math.max(52, base));
+  return Math.min(82, Math.max(56, base));
 }
 
 function getBossDamage(toilet: Toilet, boss: BossState, hasReplicas: boolean, isRushing: boolean, hasShield: boolean): number {
-  const raw = Math.max(24, Math.round(toilet.damage * 0.72 + toilet.level * 8));
-  const cap = Math.max(120, Math.round(boss.maxHp * 0.16));
-  const replicaPenalty = hasReplicas ? 0.82 : 1;
-  const rushPenalty = isRushing ? 0.74 : 1;
-  const shieldPenalty = hasShield ? 0.76 : 1;
-  return Math.max(16, Math.round(Math.min(raw, cap) * replicaPenalty * rushPenalty * shieldPenalty));
+  const raw = Math.max(28, Math.round(toilet.damage * 0.72 + toilet.level * 8));
+  const cap = Math.max(125, Math.round(boss.maxHp * 0.17));
+  const replicaPenalty = hasReplicas ? 0.86 : 1;
+  const rushPenalty = isRushing ? 0.78 : 1;
+  const shieldPenalty = hasShield ? 0.8 : 1;
+  return Math.max(18, Math.round(Math.min(raw, cap) * replicaPenalty * rushPenalty * shieldPenalty));
 }
 
 function makeStatus(text: string, tone: Status['tone'] = 'info'): Status {
@@ -233,10 +205,11 @@ function makeStatus(text: string, tone: Status['tone'] = 'info'): Status {
 }
 
 function writeProfileReward(profile: string, boss: BossState): number {
-  const jackpotCoins = boss.rewardCoins + Math.round(boss.maxHp * 0.075);
+  const jackpotCoins = boss.rewardCoins + Math.round(boss.maxHp * 0.07);
   const nextCoins = writeNumber(coinsKey(profile), readNumber(coinsKey(profile), 0) + jackpotCoins);
-  const nextWater = writeNumber(waterKey(profile), readNumber(waterKey(profile), 500) + Math.round(jackpotCoins * 0.68));
-  const nextPower = writeNumber(electricityKey(profile), readNumber(electricityKey(profile), 500) + Math.round(jackpotCoins * 0.68));
+  const bonusUtility = Math.round(jackpotCoins * 0.55);
+  const nextWater = writeNumber(waterKey(profile), readNumber(waterKey(profile), 500) + bonusUtility);
+  const nextPower = writeNumber(electricityKey(profile), readNumber(electricityKey(profile), 500) + bonusUtility);
   window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: { profile, amount: nextCoins } }));
   window.dispatchEvent(new CustomEvent(UTILITY_EVENT, { detail: { profile, kind: 'water', amount: nextWater } }));
   window.dispatchEvent(new CustomEvent(UTILITY_EVENT, { detail: { profile, kind: 'electricity', amount: nextPower } }));
@@ -282,156 +255,126 @@ export default function BossEncounterGate({ children }: BossEncounterGateProps) 
   const bossIsClose = bossDistance <= hitRange;
   const bossIsRushing = Date.now() < rushUntilRef.current;
   const bossHasShield = Date.now() < shieldUntilRef.current;
-  const jackpot = boss ? boss.rewardCoins + Math.round(boss.maxHp * 0.075) : 0;
+  const jackpot = boss ? boss.rewardCoins + Math.round(boss.maxHp * 0.07) : 0;
 
   useEffect(() => {
     if (!status) return;
     if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
-    statusTimerRef.current = window.setTimeout(() => setStatus(null), 3600);
+    statusTimerRef.current = window.setTimeout(() => setStatus(null), 2600);
     return () => {
       if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
     };
   }, [status]);
 
   useEffect(() => {
+    const tickMs = isMobileLike() ? 520 : 340;
     const interval = window.setInterval(() => {
       const wave = getActiveWave();
+      const now = Date.now();
+
       if (!isGameActivelyPlaying() || !wave || wave % 5 !== 0) {
-        setBoss(null);
-        setReplicas([]);
-        setAbilityVisuals([]);
+        if (bossRef.current) {
+          setBoss(null);
+          setReplicas([]);
+          setAbilityVisuals([]);
+        }
         lastBossWaveRef.current = null;
         return;
       }
+
       if (defeatedWavesRef.current.has(wave)) return;
+
       if (!bossRef.current || bossRef.current.wave !== wave || lastBossWaveRef.current !== wave) {
         const nextBoss = makeBossForWave(wave);
         lastBossWaveRef.current = wave;
+        rushUntilRef.current = 0;
+        shieldUntilRef.current = 0;
+        lastAbilityRef.current = now + 900;
         setBoss(nextBoss);
         setReplicas([]);
         setAbilityVisuals([]);
         setLatestAbility('Crowned bacteria is tracking you');
-        setStatus(makeStatus(`👑🦠 ${nextBoss.name} entered wave ${wave}. Clear all monsters and defeat it to unlock the next wave.`, 'warn'));
+        setStatus(makeStatus(`👑🦠 ${nextBoss.name} entered wave ${wave}. Defeat it to unlock the next wave.`, 'warn'));
         playBossAppearsSound();
+        return;
       }
-    }, 350);
-    return () => window.clearInterval(interval);
-  }, []);
 
-  useEffect(() => {
-    const moveInterval = window.setInterval(() => {
       setBoss((current) => {
-        if (!current || current.defeated || !isGameActivelyPlaying()) return current;
+        if (!current || current.defeated) return current;
         const distance = distanceBetween(current.position);
-        const speed = Math.min(3.4, 0.82 + current.wave * 0.02 + (Date.now() < rushUntilRef.current ? 1.05 : 0));
+        const speed = Math.min(4.2, 1.25 + current.wave * 0.018 + (now < rushUntilRef.current ? 0.95 : 0));
         const ratio = distance > 0 ? Math.min(speed / distance, 1) : 0;
-        const wobble = Math.sin(Date.now() / 350 + current.wave) * 0.18;
         return {
           ...current,
           position: {
-            x: Math.max(6, Math.min(94, current.position.x + (PLAYER_TARGET.x - current.position.x) * ratio + wobble)),
-            y: Math.max(12, Math.min(88, current.position.y + (PLAYER_TARGET.y - current.position.y) * ratio))
+            x: Math.max(8, Math.min(92, current.position.x + (PLAYER_TARGET.x - current.position.x) * ratio)),
+            y: Math.max(14, Math.min(88, current.position.y + (PLAYER_TARGET.y - current.position.y) * ratio))
           }
         };
       });
-    }, 110);
-    return () => window.clearInterval(moveInterval);
-  }, []);
 
-  useEffect(() => {
-    const cleanup = window.setInterval(() => {
-      const now = Date.now();
+      const activeBoss = bossRef.current;
+      if (!activeBoss || activeBoss.defeated) return;
+
+      if (now - lastPressureRef.current > 3200 && distanceBetween(activeBoss.position) <= CLOSE_RANGE) {
+        lastPressureRef.current = now;
+        const profile = getActiveProfile();
+        if (profile) {
+          const slots = Math.max(1, getAbilitySlots(activeBoss.wave));
+          const waterCost = Math.round(activeBoss.utilityCost * 0.78 + slots * 3);
+          const powerCost = Math.round(activeBoss.utilityCost + slots * 4);
+          useProfileUtilities(profile, waterCost, powerCost);
+          setStatus(makeStatus(`👑🦠 Close boss pressure used ${waterCost} water and ${powerCost} electricity.`, 'warn'));
+        }
+      }
+
+      const cooldown = Math.max(3300, 5200 - getAbilitySlots(activeBoss.wave) * 210);
+      if (now - lastAbilityRef.current > cooldown) {
+        lastAbilityRef.current = now;
+        const abilities = getAvailableAbilities(activeBoss.wave);
+        const ability = abilities[Math.floor((now / cooldown + activeBoss.wave) % abilities.length)];
+        setLatestAbility(ability.name);
+        setAbilityVisuals((items) => [
+          ...items.filter((item) => item.expiresAt > now).slice(-2),
+          {
+            id: now,
+            emoji: ability.emoji,
+            label: ability.name,
+            x: Math.max(14, Math.min(86, activeBoss.position.x + Math.random() * 16 - 8)),
+            y: Math.max(18, Math.min(84, activeBoss.position.y + Math.random() * 16 - 8)),
+            expiresAt: now + 1800
+          }
+        ]);
+
+        if (ability.kind === 'replica') {
+          const count = Math.min(isMobileLike() ? 3 : 5, 1 + getAbilitySlots(activeBoss.wave));
+          setReplicas(Array.from({ length: count }, (_, index) => ({
+            id: now + index,
+            x: Math.max(10, Math.min(90, activeBoss.position.x + Math.cos(index) * (8 + index))),
+            y: Math.max(16, Math.min(86, activeBoss.position.y + Math.sin(index) * (7 + index))),
+            expiresAt: now + 6000
+          })));
+          setStatus(makeStatus(`${activeBoss.name} spawned mini bacteria replicas.`, 'warn'));
+        } else if (ability.kind === 'rush') {
+          rushUntilRef.current = now + 5200;
+          setStatus(makeStatus(`${activeBoss.name} used Royal Rush.`, 'warn'));
+        } else if (ability.kind === 'shield') {
+          shieldUntilRef.current = now + 5200;
+          setStatus(makeStatus(`${activeBoss.name} raised its crown shield.`, 'warn'));
+        } else {
+          const profile = getActiveProfile();
+          if (profile) {
+            const cost = Math.round((10 + Math.floor(activeBoss.wave / 5) * 5) * ability.weight);
+            useProfileUtilities(profile, ability.kind === 'zone' ? cost + 8 : Math.round(cost * 0.7), ability.kind === 'spark' ? cost + 10 : cost);
+          }
+          setStatus(makeStatus(`${activeBoss.name} used ${ability.name}.`, 'warn'));
+        }
+      }
+
       setAbilityVisuals((items) => items.filter((item) => item.expiresAt > now));
       setReplicas((items) => items.filter((item) => item.expiresAt > now));
-    }, 500);
-    return () => window.clearInterval(cleanup);
-  }, []);
+    }, tickMs);
 
-  useEffect(() => {
-    const pressure = window.setInterval(() => {
-      const activeBoss = bossRef.current;
-      if (!activeBoss || activeBoss.defeated || !isGameActivelyPlaying()) return;
-      if (distanceBetween(activeBoss.position) > CLOSE_RANGE) return;
-      const now = Date.now();
-      if (now - lastPressureRef.current < 2200) return;
-      lastPressureRef.current = now;
-      const profile = getActiveProfile();
-      if (!profile) return;
-      const slots = Math.max(1, getAbilitySlots(activeBoss.wave));
-      const waterCost = activeBoss.utilityCost + slots * 4;
-      const powerCost = Math.ceil(activeBoss.utilityCost * 1.25 + slots * 5);
-      useProfileUtilities(profile, waterCost, powerCost);
-      setStatus(makeStatus(`👑🦠 ${activeBoss.name} is close and drained ${waterCost} water and ${powerCost} electricity.`, 'warn'));
-    }, 650);
-    return () => window.clearInterval(pressure);
-  }, []);
-
-  useEffect(() => {
-    const useAbility = (ability: Ability, activeBoss: BossState) => {
-      const now = Date.now();
-      const profile = getActiveProfile();
-      setLatestAbility(ability.name);
-      setAbilityVisuals((items) => [
-        ...items,
-        {
-          id: now,
-          emoji: ability.emoji,
-          label: ability.name,
-          x: Math.max(12, Math.min(88, activeBoss.position.x + Math.random() * 20 - 10)),
-          y: Math.max(16, Math.min(86, activeBoss.position.y + Math.random() * 20 - 10)),
-          expiresAt: now + 2100
-        }
-      ]);
-
-      if (ability.kind === 'replica') {
-        const count = Math.min(9, 2 + getAbilitySlots(activeBoss.wave));
-        setReplicas((items) => [
-          ...items,
-          ...Array.from({ length: count }, (_, index) => ({
-            id: now + index,
-            x: Math.max(8, Math.min(92, activeBoss.position.x + Math.cos(index) * (8 + index * 1.6))),
-            y: Math.max(14, Math.min(88, activeBoss.position.y + Math.sin(index) * (7 + index * 1.4))),
-            expiresAt: now + 8500
-          }))
-        ]);
-        setStatus(makeStatus(`${activeBoss.name} spawned mini bacteria replicas.`, 'warn'));
-        return;
-      }
-
-      if (ability.kind === 'rush') {
-        rushUntilRef.current = now + 7000;
-        setStatus(makeStatus(`${activeBoss.name} used Royal Rush and is moving faster.`, 'warn'));
-        return;
-      }
-
-      if (ability.kind === 'shield') {
-        shieldUntilRef.current = now + 7000;
-        setStatus(makeStatus(`${activeBoss.name} raised its crown shield. Damage is reduced for a moment.`, 'warn'));
-        return;
-      }
-
-      if (!profile) return;
-      const distance = distanceBetween(activeBoss.position);
-      const rangeFactor = distance <= CLOSE_RANGE ? 1 : 0.42;
-      const waveScale = Math.max(1, Math.floor(activeBoss.wave / 5));
-      const cost = Math.round((12 + waveScale * 8) * rangeFactor * ability.weight);
-      const waterCost = ability.kind === 'zone' ? cost + 14 : Math.round(cost * 0.85);
-      const powerCost = ability.kind === 'spark' ? cost + 18 : cost + 6;
-      useProfileUtilities(profile, waterCost, powerCost);
-      setStatus(makeStatus(`${activeBoss.name} used ${ability.name}. Keep moving and flush from inside the circle.`, 'warn'));
-    };
-
-    const interval = window.setInterval(() => {
-      const activeBoss = bossRef.current;
-      if (!activeBoss || activeBoss.defeated || !isGameActivelyPlaying()) return;
-      const now = Date.now();
-      const cooldown = Math.max(2200, BASE_ABILITY_COOLDOWN_MS - getAbilitySlots(activeBoss.wave) * 140);
-      if (now - lastAbilityRef.current < cooldown) return;
-      lastAbilityRef.current = now;
-      const abilities = getAvailableAbilities(activeBoss.wave);
-      const index = Math.floor((now / cooldown + activeBoss.wave) % abilities.length);
-      useAbility(abilities[index], activeBoss);
-    }, 500);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -447,16 +390,18 @@ export default function BossEncounterGate({ children }: BossEncounterGateProps) 
       const currentPower = profile ? readNumber(electricityKey(profile), 500) : 500;
       const range = getFlushRange(toilet);
       const distance = distanceBetween(activeBoss.position);
+
       if (profile && (currentWater < waterCost || currentPower < powerCost)) return;
       if (distance > range) {
         setStatus(makeStatus(`Too far. Move close to 👑🦠 until it is inside the glowing circle. Range ${Math.round(range)}, distance ${Math.round(distance)}.`, 'warn'));
         return;
       }
+
       const hitSlot = `${flushName}:${activeBoss.wave}`;
       const now = Date.now();
       const nextAllowed = lastFlushHitRef.current[hitSlot] || 0;
       if (now < nextAllowed) return;
-      lastFlushHitRef.current[hitSlot] = now + Math.max(520, toilet.cooldownMs - 160);
+      lastFlushHitRef.current[hitSlot] = now + Math.max(560, toilet.cooldownMs - 120);
       const damage = getBossDamage(toilet, activeBoss, replicasRef.current.length > 0, now < rushUntilRef.current, now < shieldUntilRef.current);
 
       setBoss((prev) => {
@@ -471,11 +416,11 @@ export default function BossEncounterGate({ children }: BossEncounterGateProps) 
           setAbilityVisuals([]);
           playUnlockSound();
           window.dispatchEvent(new CustomEvent(BOSS_DEFEATED_EVENT, { detail: { wave: prev.wave } }));
-          window.setTimeout(() => setBoss((current) => (current?.wave === prev.wave ? null : current)), 1900);
+          window.setTimeout(() => setBoss((current) => (current?.wave === prev.wave ? null : current)), 1600);
           return { ...prev, hp: 0, defeated: true };
         }
         playDamageSound();
-        setStatus(makeStatus(`${toilet.emoji} ${toilet.name} hit 👑🦠 for ${damage} HP. Stay inside the glowing circle.`, 'info'));
+        setStatus(makeStatus(`${toilet.emoji} ${toilet.name} hit 👑🦠 for ${damage} HP.`, 'info'));
         return { ...prev, hp: nextHp };
       });
     };
@@ -496,7 +441,7 @@ export default function BossEncounterGate({ children }: BossEncounterGateProps) 
     const interval = window.setInterval(() => {
       wrapFlush('triggerToiletFlush');
       wrapFlush('triggerToiletFlush2');
-    }, 250);
+    }, 900);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -506,63 +451,61 @@ export default function BossEncounterGate({ children }: BossEncounterGateProps) 
       {boss && (
         <div className="fixed inset-0 z-[334] pointer-events-none font-mono" aria-live="polite">
           <div
-            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-4 ${bossIsClose ? 'border-emerald-300/80 bg-emerald-300/12 shadow-[0_0_55px_rgba(16,185,129,0.45)]' : 'border-lime-300/45 bg-lime-400/10 shadow-[0_0_45px_rgba(132,204,22,0.32)]'}`}
-            style={{ left: `${boss.position.x}%`, top: `${boss.position.y}%`, width: `${Math.max(220, hitRange * 7)}px`, height: `${Math.max(220, hitRange * 7)}px` }}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-4 ${bossIsClose ? 'border-emerald-300/80 bg-emerald-300/12' : 'border-lime-300/45 bg-lime-400/10'}`}
+            style={{ left: `${boss.position.x}%`, top: `${boss.position.y}%`, width: `${Math.max(190, hitRange * 5.8)}px`, height: `${Math.max(190, hitRange * 5.8)}px` }}
           />
-          <div className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-200/35 bg-slate-950/75 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100" style={{ left: `${boss.position.x}%`, top: `calc(${boss.position.y}% + 8.5rem)` }}>
+          <div className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-200/35 bg-slate-950/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100" style={{ left: `${boss.position.x}%`, top: `calc(${boss.position.y}% + 7.5rem)` }}>
             {bossIsClose ? 'In hit range — flush now!' : `Hit circle range: ${hitRange}`}
           </div>
 
           {abilityVisuals.map((visual) => (
-            <div key={visual.id} className="absolute -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border border-amber-200/40 bg-black/45 px-3 py-2 text-center shadow-xl" style={{ left: `${visual.x}%`, top: `${visual.y}%` }}>
+            <div key={visual.id} className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/40 bg-black/60 px-3 py-2 text-center shadow-xl" style={{ left: `${visual.x}%`, top: `${visual.y}%` }}>
               <div className="text-3xl">{visual.emoji}</div>
               <div className="mt-1 max-w-28 text-[8px] font-black uppercase tracking-[0.12em] text-amber-100">{visual.label}</div>
             </div>
           ))}
 
           {replicas.map((replica) => (
-            <div key={replica.id} className="absolute -translate-x-1/2 -translate-y-1/2 animate-bounce rounded-full border border-lime-200/40 bg-emerald-950/70 px-3 py-2 text-4xl shadow-xl shadow-emerald-950/50" style={{ left: `${replica.x}%`, top: `${replica.y}%` }} aria-hidden="true">
+            <div key={replica.id} className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-lime-200/40 bg-emerald-950/70 px-3 py-2 text-4xl shadow-xl shadow-emerald-950/50" style={{ left: `${replica.x}%`, top: `${replica.y}%` }} aria-hidden="true">
               🦠
             </div>
           ))}
 
-          <div className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-150 ease-linear" style={{ left: `${boss.position.x}%`, top: `${boss.position.y}%` }}>
-            <div className={`${bossIsRushing ? 'animate-bounce' : 'animate-pulse'} relative text-center`}>
-              <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-lime-400/20 blur-3xl" />
-              <div className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-lime-200/30" />
-              {bossHasShield && <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-yellow-300/60 shadow-[0_0_45px_rgba(250,204,21,0.45)]" />}
-              <div className="relative rounded-[2rem] border border-lime-300/60 bg-slate-950/65 px-5 py-4 shadow-2xl shadow-emerald-950/70 backdrop-blur-sm">
-                <div className="absolute -top-12 left-1/2 -translate-x-1/2 text-[4.5rem] drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)]">👑</div>
-                <div className="text-[6.5rem] leading-none drop-shadow-[0_18px_28px_rgba(0,0,0,0.8)] sm:text-[8rem]">🦠</div>
-                <div className="mt-1 rounded-full border border-white/15 bg-black/55 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-lime-100">{boss.name}</div>
-                <div className="mt-2 text-[9px] font-black uppercase tracking-[0.22em] text-amber-200">Wave {boss.wave} • Distance {bossDistance} • {bossIsClose ? 'HITTABLE' : 'CHASE IT'}</div>
+          <div className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-linear" style={{ left: `${boss.position.x}%`, top: `${boss.position.y}%` }}>
+            <div className="relative text-center">
+              {bossHasShield && <div className="absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-yellow-300/55" />}
+              <div className="relative rounded-[2rem] border border-lime-300/60 bg-slate-950/70 px-4 py-3 shadow-2xl shadow-emerald-950/60 backdrop-blur-sm">
+                <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-[4rem]">👑</div>
+                <div className="text-[5rem] leading-none sm:text-[7rem]">🦠</div>
+                <div className="mt-1 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-lime-100">{boss.name}</div>
+                <div className="mt-2 text-[9px] font-black uppercase tracking-[0.2em] text-amber-200">Wave {boss.wave} • Distance {bossDistance} • {bossIsClose ? 'HITTABLE' : 'CHASE IT'}</div>
               </div>
             </div>
           </div>
 
-          <div className="absolute right-4 top-24 w-[min(92vw,405px)] rounded-3xl border border-lime-400/55 bg-gradient-to-br from-emerald-950/95 via-slate-950/95 to-lime-950/95 p-4 text-white shadow-2xl shadow-emerald-950/50 backdrop-blur-md pointer-events-auto">
+          <div className="absolute right-4 top-24 w-[min(92vw,360px)] rounded-3xl border border-lime-400/55 bg-gradient-to-br from-emerald-950/94 via-slate-950/94 to-lime-950/94 p-3 text-white shadow-2xl shadow-emerald-950/40 backdrop-blur-md pointer-events-auto">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] uppercase tracking-[0.28em] text-lime-200">Crowned bacteria boss</div>
-                <div className="text-xl font-black leading-tight">👑🦠 {boss.name}</div>
-                <div className="mt-1 text-[11px] text-slate-300">Defeat every monster and this boss to unlock the next wave. Flush only counts inside the glowing circle.</div>
+                <div className="text-[9px] uppercase tracking-[0.24em] text-lime-200">Crowned bacteria boss</div>
+                <div className="text-lg font-black leading-tight">👑🦠 {boss.name}</div>
+                <div className="mt-1 text-[10px] text-slate-300">Flush counts only inside the glowing circle.</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-right">
-                <div className="text-[9px] uppercase tracking-wider text-slate-300">Jackpot</div>
+                <div className="text-[8px] uppercase tracking-wider text-slate-300">Jackpot</div>
                 <div className="text-sm font-black text-amber-200">+{jackpot}</div>
               </div>
             </div>
-            <div className="mt-4">
+            <div className="mt-3">
               <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-slate-300"><span>Boss HP</span><span>{Math.ceil(boss.hp)} / {boss.maxHp}</span></div>
-              <div className="h-4 overflow-hidden rounded-full border border-lime-300/30 bg-slate-900"><div className="h-full bg-gradient-to-r from-lime-500 via-yellow-300 to-orange-300 transition-all duration-200" style={{ width: `${bossRatio * 100}%` }} /></div>
+              <div className="h-3 overflow-hidden rounded-full border border-lime-300/30 bg-slate-900"><div className="h-full bg-gradient-to-r from-lime-500 via-yellow-300 to-orange-300 transition-all duration-200" style={{ width: `${bossRatio * 100}%` }} /></div>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px] uppercase tracking-wider text-slate-300">
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[10px] uppercase tracking-wider text-slate-300">
               <div className={`rounded-xl border p-2 ${bossIsClose ? 'border-emerald-300/40 bg-emerald-900/35' : 'border-white/10 bg-white/5'}`}><div className="text-base font-black text-cyan-200">{bossDistance}</div><div>distance</div></div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-2"><div className="text-base font-black text-fuchsia-200">{abilitySlots}</div><div>abilities</div></div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-2"><div className="text-base font-black text-amber-200">{replicas.length}</div><div>replicas</div></div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-2"><div className="text-base font-black text-fuchsia-200">{abilitySlots}</div><div>powers</div></div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-2"><div className="text-base font-black text-amber-200">{replicas.length}</div><div>copies</div></div>
             </div>
-            <div className="mt-3 rounded-2xl border border-white/10 bg-black/25 p-3 text-xs text-slate-200"><span className="font-black text-amber-200">Latest power:</span> {latestAbility}<div className="mt-1 text-[11px] text-lime-100">Tip: stand near the glowing circle and flush when the bacteria is close.</div></div>
-            {status && <div className={`mt-3 rounded-2xl border px-3 py-2 text-xs font-bold ${status.tone === 'success' ? 'border-emerald-300/35 bg-emerald-900/35 text-emerald-100' : status.tone === 'warn' ? 'border-amber-300/35 bg-amber-900/35 text-amber-100' : 'border-cyan-300/35 bg-cyan-900/35 text-cyan-100'}`}>{status.text}</div>}
+            <div className="mt-2 rounded-2xl border border-white/10 bg-black/25 p-2 text-xs text-slate-200"><span className="font-black text-amber-200">Latest:</span> {latestAbility}</div>
+            {status && <div className={`mt-2 rounded-2xl border px-3 py-2 text-xs font-bold ${status.tone === 'success' ? 'border-emerald-300/35 bg-emerald-900/35 text-emerald-100' : status.tone === 'warn' ? 'border-amber-300/35 bg-amber-900/35 text-amber-100' : 'border-cyan-300/35 bg-cyan-900/35 text-cyan-100'}`}>{status.text}</div>}
           </div>
         </div>
       )}
