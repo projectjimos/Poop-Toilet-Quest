@@ -46,8 +46,12 @@ const RUNTIME_KEY = '__ptqWaveClearRuntime';
 const WAVE_UPDATE_EVENT = 'ptq:wave-director-updated';
 const BOSS_DEFEATED_EVENT = 'ptq:boss-defeated';
 const COIN_EXPIRED_EVENT = 'ptq:coin-pickups-expired';
-const TICK_MS = 450;
+const TICK_MS = 900;
 const COIN_TTL_MS = 15_000;
+const ACTIVE_CHECK_CACHE_MS = 1200;
+
+let lastActiveCheckAt = 0;
+let lastActiveCheckValue = false;
 
 function getRuntime(): GameRuntime | undefined {
   return (window as unknown as Record<string, GameRuntime | undefined>)[RUNTIME_KEY];
@@ -63,11 +67,16 @@ function setRuntime(runtime: GameRuntime | undefined): void {
 }
 
 function isGameActivelyPlaying(): boolean {
+  const now = Date.now();
+  if (now - lastActiveCheckAt < ACTIVE_CHECK_CACHE_MS) return lastActiveCheckValue;
+  lastActiveCheckAt = now;
+
   const text = document.body?.innerText || '';
   const isLobby = /SELECT INPUT SYSTEM|Start PC Play|Start Mobile Play|Start CO-OP Play/i.test(text);
   const isGameOver = /GAME OVER|Try Again|Return to Lobby/i.test(text);
   const hasGameHud = /Poop Crusader\s*Level\s*\d+/i.test(text);
-  return hasGameHud && !isLobby && !isGameOver;
+  lastActiveCheckValue = hasGameHud && !isLobby && !isGameOver;
+  return lastActiveCheckValue;
 }
 
 function isEnemyLike(value: unknown): value is EnemyLike {
@@ -120,9 +129,9 @@ function stampCoin(coin: CoinLike, now: number): void {
 }
 
 function getQuotaForWave(wave: number): number {
-  const base = 7 + wave * 2 + Math.floor(wave / 2);
-  const bossBonus = wave % 5 === 0 ? 5 + Math.floor(wave / 5) : 0;
-  return Math.min(90, Math.max(8, base + bossBonus));
+  const base = 6 + wave * 2 + Math.floor(wave / 2);
+  const bossBonus = wave % 5 === 0 ? 4 + Math.floor(wave / 5) : 0;
+  return Math.min(60, Math.max(8, base + bossBonus));
 }
 
 function resetForWave(runtime: GameRuntime, wave: number): void {
@@ -132,7 +141,7 @@ function resetForWave(runtime: GameRuntime, wave: number): void {
   runtime.liveEnemies = 0;
   runtime.bossRequired = runtime.currentWave % 5 === 0;
   runtime.bossDefeated = !runtime.bossRequired;
-  runtime.gateOpenUntil = Date.now() + 700;
+  runtime.gateOpenUntil = Date.now() + 900;
 }
 
 function clearTrackedEnemies(runtime: GameRuntime): void {
@@ -261,42 +270,49 @@ export default function GameRuntimeGate({ children }: { children: ReactNode }) {
 
       Array.prototype.push = function ptqGameRuntimePush<T>(this: T[], ...items: T[]): number {
         const activeRuntime = getRuntime();
-        if (!activeRuntime) return originalPush.apply(this, items);
+        if (!activeRuntime || items.length === 0) return originalPush.apply(this, items);
+
+        let hasObjectItem = false;
+        for (let index = 0; index < items.length; index += 1) {
+          if (items[index] && typeof items[index] === 'object') {
+            hasObjectItem = true;
+            break;
+          }
+        }
+        if (!hasObjectItem) return activeRuntime.originalPush.apply(this, items);
 
         const now = Date.now();
         const allowedItems: T[] = [];
         let acceptedEnemy = false;
         let containsCoin = false;
 
-        items.forEach((item) => {
+        for (let index = 0; index < items.length; index += 1) {
+          const item = items[index];
           if (isCoinLike(item)) {
             stampCoin(item, now);
             containsCoin = true;
             allowedItems.push(item);
-            return;
+            continue;
           }
 
           if (!activeRuntime.active || !isEnemyLike(item)) {
             allowedItems.push(item);
-            return;
+            continue;
           }
 
           const stillOpening = now < activeRuntime.gateOpenUntil;
           const canSpawn = stillOpening || activeRuntime.spawnedThisWave < activeRuntime.targetQuota;
-          if (!canSpawn) return;
+          if (!canSpawn) continue;
 
           item.__ptqWave = activeRuntime.currentWave;
           activeRuntime.spawnedThisWave += 1;
           acceptedEnemy = true;
           allowedItems.push(item);
-        });
+        }
 
         const result = activeRuntime.originalPush.apply(this, allowedItems);
 
-        if (containsCoin) {
-          activeRuntime.coinArrays.add(this as unknown[]);
-        }
-
+        if (containsCoin) activeRuntime.coinArrays.add(this as unknown[]);
         if (acceptedEnemy) {
           activeRuntime.enemyArrays.add(this as unknown[]);
           activeRuntime.liveEnemies = countLiveEnemies(activeRuntime);
