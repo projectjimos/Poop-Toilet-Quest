@@ -20,9 +20,15 @@ type JuiceToast = {
   detail: string;
 };
 
+type WaveDirectorDetail = {
+  reason?: string;
+  currentWave?: number;
+};
+
 const COIN_STREAK_TARGET = 5;
 const COIN_STREAK_WINDOW_MS = 2600;
 const TOAST_DURATION_MS = 2900;
+const HUD_SCAN_MS = 1400;
 
 const getCookieValue = (name: string) => {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()\[\]\\/+^]/g, '\\$&')}=([^;]*)`));
@@ -98,6 +104,39 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
 
     resetBaselinesForProfile(profileRef.current);
 
+    const handleWaveUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<WaveDirectorDetail>).detail || {};
+      const currentWave = Number(detail.currentWave);
+      if (!Number.isFinite(currentWave) || currentWave < 1) return;
+
+      if (lastWaveRef.current === null) {
+        lastWaveRef.current = currentWave;
+        return;
+      }
+
+      if (currentWave > lastWaveRef.current) {
+        playWaveCompleteSound();
+        pushToast({
+          kind: 'wave',
+          icon: '🏁',
+          title: `Wave ${lastWaveRef.current} cleared!`,
+          detail: `Wave ${currentWave} is live.`
+        });
+
+        if (currentWave % 5 === 0) {
+          playBossAppearsSound();
+          pushToast({
+            kind: 'boss',
+            icon: '🚨',
+            title: 'Boss pressure rising!',
+            detail: `Wave ${currentWave} is a danger spike.`
+          });
+        }
+
+        lastWaveRef.current = currentWave;
+      }
+    };
+
     const intervalId = window.setInterval(() => {
       const now = Date.now();
       const profile = getCurrentProfile();
@@ -152,33 +191,6 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
       unlockedRef.current = nextUnlocked;
 
       const pageText = document.body.innerText || '';
-      const currentWave = extractNumberFromText(pageText, /\bWave\s*[:#-]?\s*(\d{1,3})\b/i);
-
-      if (currentWave !== null) {
-        if (lastWaveRef.current === null) {
-          lastWaveRef.current = currentWave;
-        } else if (currentWave > lastWaveRef.current) {
-          playWaveCompleteSound();
-          pushToast({
-            kind: 'wave',
-            icon: '🏁',
-            title: `Wave ${lastWaveRef.current} cleared!`,
-            detail: `Wave ${currentWave} is live.`
-          });
-
-          if (currentWave % 5 === 0) {
-            playBossAppearsSound();
-            pushToast({
-              kind: 'boss',
-              icon: '🚨',
-              title: 'Boss pressure rising!',
-              detail: `Wave ${currentWave} is a danger spike.`
-            });
-          }
-
-          lastWaveRef.current = currentWave;
-        }
-      }
 
       const currentHp = extractNumberFromText(pageText, /\b(?:HP|Health)\s*[:#-]?\s*(\d{1,3})\b/i);
       if (currentHp !== null && currentHp > 0 && currentHp <= 30 && now - lastHpWarningRef.current > 6500) {
@@ -211,9 +223,14 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
           lastKillsRef.current = currentKills;
         }
       }
-    }, 600);
+    }, HUD_SCAN_MS);
 
-    return () => window.clearInterval(intervalId);
+    window.addEventListener('ptq:wave-director-updated', handleWaveUpdate as EventListener);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('ptq:wave-director-updated', handleWaveUpdate as EventListener);
+    };
   }, []);
 
   return (
