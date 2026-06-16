@@ -46,6 +46,7 @@ const RUNTIME_KEY = '__ptqWaveClearRuntime';
 const WAVE_UPDATE_EVENT = 'ptq:wave-director-updated';
 const BOSS_DEFEATED_EVENT = 'ptq:boss-defeated';
 const COIN_EXPIRED_EVENT = 'ptq:coin-pickups-expired';
+const PLAY_REQUESTED_EVENT = 'ptq:play-requested';
 const TICK_MS = 900;
 const COIN_TTL_MS = 15_000;
 const ACTIVE_CHECK_CACHE_MS = 1200;
@@ -72,7 +73,7 @@ function isGameActivelyPlaying(): boolean {
   lastActiveCheckAt = now;
 
   const text = document.body?.innerText || '';
-  const isLobby = /SELECT INPUT SYSTEM|Start PC Play|Start Mobile Play|Start CO-OP Play/i.test(text);
+  const isLobby = /SELECT INPUT SYSTEM|Start PC Play|Start Mobile Play|Start CO-OP Play|Start Quest/i.test(text);
   const isGameOver = /GAME OVER|Try Again|Return to Lobby/i.test(text);
   const hasGameHud = /Poop Crusader\s*Level\s*\d+/i.test(text);
   lastActiveCheckValue = hasGameHud && !isLobby && !isGameOver;
@@ -142,6 +143,16 @@ function resetForWave(runtime: GameRuntime, wave: number): void {
   runtime.bossRequired = runtime.currentWave % 5 === 0;
   runtime.bossDefeated = !runtime.bossRequired;
   runtime.gateOpenUntil = Date.now() + 900;
+}
+
+function forceRuntimePlaying(runtime: GameRuntime, reason = 'play-requested'): void {
+  runtime.active = true;
+  runtime.lastActiveState = true;
+  runtime.enemyArrays.clear();
+  resetForWave(runtime, 1);
+  lastActiveCheckAt = Date.now();
+  lastActiveCheckValue = true;
+  emitUpdate(runtime, reason);
 }
 
 function clearTrackedEnemies(runtime: GameRuntime): void {
@@ -338,7 +349,14 @@ export default function GameRuntimeGate({ children }: { children: ReactNode }) {
       }
     };
 
+    const handlePlayRequested = () => {
+      const activeRuntime = getRuntime();
+      if (!activeRuntime) return;
+      forceRuntimePlaying(activeRuntime, 'play-requested');
+    };
+
     window.addEventListener(BOSS_DEFEATED_EVENT, handleBossDefeated);
+    window.addEventListener(PLAY_REQUESTED_EVENT, handlePlayRequested);
 
     const interval = window.setInterval(() => {
       const activeRuntime = getRuntime();
@@ -346,10 +364,7 @@ export default function GameRuntimeGate({ children }: { children: ReactNode }) {
       const playingNow = isGameActivelyPlaying();
 
       if (playingNow && !activeRuntime.lastActiveState) {
-        activeRuntime.active = true;
-        activeRuntime.enemyArrays.clear();
-        resetForWave(activeRuntime, 1);
-        emitUpdate(activeRuntime, 'game-started');
+        forceRuntimePlaying(activeRuntime, 'game-started');
       }
 
       if (!playingNow && activeRuntime.lastActiveState) {
@@ -365,12 +380,13 @@ export default function GameRuntimeGate({ children }: { children: ReactNode }) {
       }
 
       activeRuntime.lastActiveState = playingNow;
-      if (playingNow) maybeAdvanceWave(activeRuntime);
+      if (playingNow || activeRuntime.active) maybeAdvanceWave(activeRuntime);
       else pruneCoins(activeRuntime);
     }, TICK_MS);
 
     return () => {
       window.removeEventListener(BOSS_DEFEATED_EVENT, handleBossDefeated);
+      window.removeEventListener(PLAY_REQUESTED_EVENT, handlePlayRequested);
       window.clearInterval(interval);
       const activeRuntime = getRuntime();
       if (!activeRuntime) return;
