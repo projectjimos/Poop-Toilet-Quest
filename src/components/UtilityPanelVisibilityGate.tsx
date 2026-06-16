@@ -20,19 +20,7 @@ function isUtilitiesPanel(node: HTMLElement): boolean {
 
 function findUtilitiesPanel(): HTMLElement | null {
   const fixedPanels = Array.from(document.querySelectorAll<HTMLElement>('div.fixed'));
-  const directMatch = fixedPanels.find(isUtilitiesPanel);
-  if (directMatch) return directMatch;
-
-  const textMatch = Array.from(document.querySelectorAll<HTMLElement>('div')).find(isUtilitiesPanel);
-  if (!textMatch) return null;
-
-  let current: HTMLElement | null = textMatch;
-  while (current) {
-    if (current.classList.contains('fixed')) return current;
-    current = current.parentElement;
-  }
-
-  return textMatch;
+  return fixedPanels.find(isUtilitiesPanel) || null;
 }
 
 function applyPanelVisibility(hidden: boolean): boolean {
@@ -59,7 +47,7 @@ export default function UtilityPanelVisibilityGate({ children }: UtilityPanelVis
 
   const buttonLabel = useMemo(() => {
     if (hidden) return 'Show Utilities';
-    return panelFound ? 'Hide Utilities' : 'Find Utilities';
+    return panelFound ? 'Hide Utilities' : 'Hide Utilities';
   }, [hidden, panelFound]);
 
   useEffect(() => {
@@ -72,7 +60,7 @@ export default function UtilityPanelVisibilityGate({ children }: UtilityPanelVis
 
     const onStorage = () => syncProfile();
     const onUtilities = () => syncProfile();
-    const interval = window.setInterval(syncProfile, 2000);
+    const interval = window.setInterval(syncProfile, 4000);
     window.addEventListener('storage', onStorage);
     window.addEventListener('ptq:utilities-updated', onUtilities as EventListener);
 
@@ -84,24 +72,23 @@ export default function UtilityPanelVisibilityGate({ children }: UtilityPanelVis
   }, []);
 
   useEffect(() => {
-    let animationFrame = 0;
-
+    let frame = 0;
     const apply = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        setPanelFound(applyPanelVisibility(hidden));
-      });
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => setPanelFound(applyPanelVisibility(hidden)));
     };
 
     apply();
-    const observer = new MutationObserver(apply);
-    observer.observe(document.body, { childList: true, subtree: true });
-    const interval = window.setInterval(apply, 1500);
+    const interval = window.setInterval(apply, 3500);
+
+    window.addEventListener('ptq:utilities-updated', apply as EventListener);
+    window.addEventListener('resize', apply);
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
+      window.cancelAnimationFrame(frame);
       window.clearInterval(interval);
-      observer.disconnect();
+      window.removeEventListener('ptq:utilities-updated', apply as EventListener);
+      window.removeEventListener('resize', apply);
       applyPanelVisibility(false);
     };
   }, [hidden]);
