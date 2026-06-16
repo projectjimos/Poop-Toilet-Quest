@@ -69,8 +69,18 @@ export default function UtilityPanelVisibilityGate({ children }: UtilityPanelVis
   useEffect(() => {
     const syncProfile = () => setHasProfile(Boolean(getActiveProfile()));
     syncProfile();
-    const interval = window.setInterval(syncProfile, 750);
-    return () => window.clearInterval(interval);
+
+    const onStorage = () => syncProfile();
+    const onUtilities = () => syncProfile();
+    const interval = window.setInterval(syncProfile, 2000);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('ptq:utilities-updated', onUtilities as EventListener);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('ptq:utilities-updated', onUtilities as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -85,8 +95,8 @@ export default function UtilityPanelVisibilityGate({ children }: UtilityPanelVis
 
     apply();
     const observer = new MutationObserver(apply);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    const interval = window.setInterval(apply, 500);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const interval = window.setInterval(apply, 1500);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
