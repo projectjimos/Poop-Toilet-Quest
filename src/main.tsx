@@ -10,6 +10,7 @@ import GameQualityGuard from './components/GameQualityGuard.tsx';
 import GameRuntimeGate from './components/GameRuntimeGate.tsx';
 import IntroCinematic from './components/IntroCinematic.tsx';
 import JuiceLayerGate from './components/JuiceLayerGate.tsx';
+import MobileControlsFixGate from './components/MobileControlsFixGate.tsx';
 import MobileExperienceGate from './components/MobileExperienceGate.tsx';
 import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import UtilityPanelVisibilityGate from './components/UtilityPanelVisibilityGate.tsx';
@@ -32,7 +33,9 @@ createRoot(document.getElementById('root')!).render(
                       <BossEncounterGate>
                         <WaveBossDirectorGate>
                           <JuiceLayerGate>
-                            <App />
+                            <MobileControlsFixGate>
+                              <App />
+                            </MobileControlsFixGate>
                           </JuiceLayerGate>
                         </WaveBossDirectorGate>
                       </BossEncounterGate>
