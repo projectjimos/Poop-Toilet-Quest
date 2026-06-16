@@ -1,0 +1,98 @@
+/* Mobile and touch-device layout guardrails for Poop Toilet Quest.
+   This file intentionally uses broad selectors because several UI layers are
+   wrapper-based and Tailwind-generated. Keep these rules focused on small screens
+   and the ptq-mobile class set by MobileExperienceGate. */
+
+html.ptq-mobile,
+html.ptq-mobile body {
+  min-height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.ptq-mobile body {
+  touch-action: pan-y;
+}
+
+html.ptq-mobile button,
+html.ptq-mobile a,
+html.ptq-mobile input {
+  min-height: 44px;
+}
+
+html.ptq-mobile input {
+  font-size: 16px;
+}
+
+/* Keep the first-run tutorial fully visible and skippable on phones. */
+html.ptq-mobile [role="dialog"][aria-labelledby="first-run-tutorial-title"] {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem max(0.75rem, env(safe-area-inset-bottom));
+}
+
+html.ptq-mobile [role="dialog"][aria-labelledby="first-run-tutorial-title"] > div {
+  max-height: calc(100dvh - 1.5rem);
+  overflow-y: auto;
+  border-radius: 1.25rem;
+}
+
+/* Make the game arena large enough to play, but not so tall that the HUD/shop disappears. */
+html.ptq-mobile [class*="aspect-video"][class*="h-[480px]"] {
+  height: min(58dvh, 430px) !important;
+  min-height: 330px;
+  aspect-ratio: auto !important;
+  touch-action: none;
+}
+
+@media (max-width: 420px) {
+  html.ptq-mobile [class*="aspect-video"][class*="h-[480px]"] {
+    height: 54dvh !important;
+    min-height: 300px;
+  }
+}
+
+/* The utility panel must stay usable without covering the mobile flush button. */
+html.ptq-mobile [class*="z-[70]"][class*="bottom-4"][class*="right-4"] {
+  top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
+  bottom: auto !important;
+  left: 0.5rem !important;
+  right: 0.5rem !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+html.ptq-mobile [class*="z-[70]"][class*="bottom-4"][class*="right-4"] > div {
+  max-height: min(42dvh, 360px);
+  overflow-y: auto;
+}
+
+@media (max-width: 430px) {
+  html.ptq-mobile [class*="z-[70]"][class*="bottom-4"][class*="right-4"] > div {
+    max-height: 38dvh;
+  }
+}
+
+/* Keep the soundtrack panel from blocking joystick movement and shop buttons. */
+html.ptq-mobile .cowband-soundtrack,
+html.ptq-mobile [class*="Cowband"],
+html.ptq-mobile iframe[src*="youtube"] {
+  max-width: min(92vw, 340px);
+}
+
+/* Mobile users should see compact panels instead of dense desktop cards. */
+@media (max-width: 640px) {
+  html.ptq-mobile h1,
+  html.ptq-mobile h2,
+  html.ptq-mobile h3 {
+    text-wrap: balance;
+  }
+
+  html.ptq-mobile .grid {
+    min-width: 0;
+  }
+
+  html.ptq-mobile [class*="rounded-3xl"] {
+    border-radius: 1.25rem;
+  }
+}
