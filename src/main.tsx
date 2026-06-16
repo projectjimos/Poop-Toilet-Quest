@@ -15,6 +15,7 @@ import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import UtilityPanelVisibilityGate from './components/UtilityPanelVisibilityGate.tsx';
 import WaterSystemGate from './components/WaterSystemGate.tsx';
 import WaveBossDirectorGate from './components/WaveBossDirectorGate.tsx';
+import WaveClearDirectorGate from './components/WaveClearDirectorGate.tsx';
 import './index.css';
 import './mobile.css';
 
@@ -29,13 +30,15 @@ createRoot(document.getElementById('root')!).render(
                 <FirstRunTutorialGate>
                   <GameQualityGuard>
                     <CoinLifetimeGate>
-                      <BossEncounterGate>
-                        <WaveBossDirectorGate>
-                          <JuiceLayerGate>
-                            <App />
-                          </JuiceLayerGate>
-                        </WaveBossDirectorGate>
-                      </BossEncounterGate>
+                      <WaveClearDirectorGate>
+                        <BossEncounterGate>
+                          <WaveBossDirectorGate>
+                            <JuiceLayerGate>
+                              <App />
+                            </JuiceLayerGate>
+                          </WaveBossDirectorGate>
+                        </BossEncounterGate>
+                      </WaveClearDirectorGate>
                     </CoinLifetimeGate>
                   </GameQualityGuard>
                 </FirstRunTutorialGate>
