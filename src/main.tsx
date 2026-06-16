@@ -12,6 +12,7 @@ import MobileExperienceGate from './components/MobileExperienceGate.tsx';
 import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import WaterSystemGate from './components/WaterSystemGate.tsx';
 import './index.css';
+import './mobile.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
