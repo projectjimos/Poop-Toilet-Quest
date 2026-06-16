@@ -25,7 +25,7 @@ export default function CowbandSoundtrackGate({ children }: CowbandSoundtrackGat
       {children}
 
       <aside
-        className="fixed bottom-4 left-4 z-[90] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-amber-300/25 bg-slate-950/90 text-slate-100 shadow-2xl shadow-amber-500/10 backdrop-blur-xl"
+        className="cowband-soundtrack fixed bottom-4 left-4 z-[90] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-amber-300/25 bg-slate-950/90 text-slate-100 shadow-2xl shadow-amber-500/10 backdrop-blur-xl"
         aria-label="Cowband soundtrack player"
       >
         <div className="flex items-center gap-3 border-b border-slate-800/80 px-4 py-3">
