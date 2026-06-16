@@ -11,6 +11,7 @@ import JuiceLayerGate from './components/JuiceLayerGate.tsx';
 import MobileExperienceGate from './components/MobileExperienceGate.tsx';
 import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import WaterSystemGate from './components/WaterSystemGate.tsx';
+import WaveBossDirectorGate from './components/WaveBossDirectorGate.tsx';
 import './index.css';
 import './mobile.css';
 
@@ -23,9 +24,11 @@ createRoot(document.getElementById('root')!).render(
             <WaterSystemGate>
               <FirstRunTutorialGate>
                 <GameQualityGuard>
-                  <JuiceLayerGate>
-                    <App />
-                  </JuiceLayerGate>
+                  <WaveBossDirectorGate>
+                    <JuiceLayerGate>
+                      <App />
+                    </JuiceLayerGate>
+                  </WaveBossDirectorGate>
                 </GameQualityGuard>
               </FirstRunTutorialGate>
             </WaterSystemGate>
