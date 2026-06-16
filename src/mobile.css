@@ -73,11 +73,20 @@ html.ptq-mobile [class*="z-[70]"][class*="bottom-4"][class*="right-4"] > div {
   }
 }
 
-/* Keep the soundtrack panel from blocking joystick movement and shop buttons. */
-html.ptq-mobile .cowband-soundtrack,
-html.ptq-mobile [class*="Cowband"],
-html.ptq-mobile iframe[src*="youtube"] {
-  max-width: min(92vw, 340px);
+/* Keep the soundtrack from stealing the lower-left mobile movement zone. */
+html.ptq-mobile .cowband-soundtrack {
+  left: 0.5rem !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem) !important;
+  width: min(13.5rem, calc(100vw - 1rem)) !important;
+  border-radius: 1rem !important;
+}
+
+html.ptq-mobile .cowband-soundtrack iframe {
+  max-height: 7.5rem;
+}
+
+html.ptq-mobile .cowband-soundtrack p {
+  display: none;
 }
 
 /* Mobile users should see compact panels instead of dense desktop cards. */
