@@ -4,13 +4,11 @@ import { TOILET_CATALOG } from '../data';
 import {
   playBossAppearsSound,
   playCoinStreakSound,
-  playLowHpHeartbeatSound,
   playNewToiletRevealSound,
-  playPerfectFlushSound,
   playWaveCompleteSound
 } from '../utils/audio';
 
-type JuiceToastKind = 'coins' | 'flush' | 'toilet' | 'boss' | 'hp' | 'wave';
+type JuiceToastKind = 'coins' | 'toilet' | 'boss' | 'wave';
 
 type JuiceToast = {
   id: number;
@@ -27,8 +25,8 @@ type WaveDirectorDetail = {
 
 const COIN_STREAK_TARGET = 5;
 const COIN_STREAK_WINDOW_MS = 2600;
-const TOAST_DURATION_MS = 2900;
-const HUD_SCAN_MS = 1400;
+const TOAST_DURATION_MS = 2600;
+const STORAGE_SCAN_MS = 2200;
 
 const getCookieValue = (name: string) => {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()\[\]\\/+^]/g, '\\$&')}=([^;]*)`));
@@ -56,19 +54,10 @@ const parseArray = (value: string | null): string[] => {
 
 const getToiletName = (id: string) => TOILET_CATALOG.find((toilet) => toilet.id === id)?.name || 'Unknown Toilet';
 
-const extractNumberFromText = (text: string, regex: RegExp) => {
-  const match = text.match(regex);
-  if (!match?.[1]) return null;
-  const value = Number.parseInt(match[1], 10);
-  return Number.isFinite(value) ? value : null;
-};
-
 const toastStyles: Record<JuiceToastKind, string> = {
   coins: 'border-yellow-300/40 bg-yellow-400/15 text-yellow-100 shadow-yellow-900/25',
-  flush: 'border-cyan-300/40 bg-cyan-400/15 text-cyan-100 shadow-cyan-900/25',
   toilet: 'border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100 shadow-fuchsia-900/25',
   boss: 'border-red-300/40 bg-red-500/15 text-red-100 shadow-red-950/35',
-  hp: 'border-rose-300/40 bg-rose-500/15 text-rose-100 shadow-rose-950/35',
   wave: 'border-emerald-300/40 bg-emerald-400/15 text-emerald-100 shadow-emerald-900/25'
 };
 
@@ -80,13 +69,10 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
   const lastCoinStreakSoundRef = useRef(0);
   const unlockedRef = useRef<string[] | null>(null);
   const lastWaveRef = useRef<number | null>(null);
-  const lastHpWarningRef = useRef(0);
-  const lastKillsRef = useRef<number | null>(null);
-  const lastPerfectFlushRef = useRef(0);
 
   const pushToast = (toast: Omit<JuiceToast, 'id'>) => {
     const id = Date.now() + Math.random();
-    setToasts((current) => [...current.slice(-2), { ...toast, id }]);
+    setToasts((current) => [...current.slice(-1), { ...toast, id }]);
     window.setTimeout(() => {
       setToasts((current) => current.filter((item) => item.id !== id));
     }, TOAST_DURATION_MS);
@@ -99,7 +85,6 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
       unlockedRef.current = parseArray(localStorage.getItem(`poop_quest_unlocked_${profile}`));
       coinBurstRef.current = { count: 0, expiresAt: 0 };
       lastWaveRef.current = null;
-      lastKillsRef.current = null;
     };
 
     resetBaselinesForProfile(profileRef.current);
@@ -128,8 +113,8 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
           pushToast({
             kind: 'boss',
             icon: '🚨',
-            title: 'Boss pressure rising!',
-            detail: `Wave ${currentWave} is a danger spike.`
+            title: 'Boss wave!',
+            detail: `Wave ${currentWave} has a crowned bacteria boss.`
           });
         }
 
@@ -137,7 +122,7 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
       }
     };
 
-    const intervalId = window.setInterval(() => {
+    const checkStorageRewards = () => {
       const now = Date.now();
       const profile = getCurrentProfile();
 
@@ -159,7 +144,7 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
           expiresAt: now + COIN_STREAK_WINDOW_MS
         };
 
-        if (nextBurstCount >= COIN_STREAK_TARGET && now - lastCoinStreakSoundRef.current > 2200) {
+        if (nextBurstCount >= COIN_STREAK_TARGET && now - lastCoinStreakSoundRef.current > 2600) {
           lastCoinStreakSoundRef.current = now;
           coinBurstRef.current = { count: 0, expiresAt: now + COIN_STREAK_WINDOW_MS };
           playCoinStreakSound();
@@ -167,7 +152,7 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
             kind: 'coins',
             icon: '🪙',
             title: `${nextBurstCount}-coin streak!`,
-            detail: 'Rising pitch reward activated.'
+            detail: 'Nice pickup chain.'
           });
         }
       }
@@ -189,54 +174,23 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
         });
       }
       unlockedRef.current = nextUnlocked;
+    };
 
-      const pageText = document.body.innerText || '';
-
-      const currentHp = extractNumberFromText(pageText, /\b(?:HP|Health)\s*[:#-]?\s*(\d{1,3})\b/i);
-      if (currentHp !== null && currentHp > 0 && currentHp <= 30 && now - lastHpWarningRef.current > 6500) {
-        lastHpWarningRef.current = now;
-        playLowHpHeartbeatSound();
-        pushToast({
-          kind: 'hp',
-          icon: '❤️',
-          title: 'Low HP!',
-          detail: 'Move fast and look for fruit or space.'
-        });
-      }
-
-      const currentKills = extractNumberFromText(pageText, /\b(?:Kills?|Flushed)\s*[:#-]?\s*(\d{1,4})\b/i);
-      if (currentKills !== null) {
-        if (lastKillsRef.current === null) {
-          lastKillsRef.current = currentKills;
-        } else {
-          const killDelta = currentKills - lastKillsRef.current;
-          if (killDelta >= 3 && now - lastPerfectFlushRef.current > 3200) {
-            lastPerfectFlushRef.current = now;
-            playPerfectFlushSound();
-            pushToast({
-              kind: 'flush',
-              icon: '💥',
-              title: 'Perfect flush!',
-              detail: `${killDelta} enemies cleared in one burst.`
-            });
-          }
-          lastKillsRef.current = currentKills;
-        }
-      }
-    }, HUD_SCAN_MS);
-
+    const intervalId = window.setInterval(checkStorageRewards, STORAGE_SCAN_MS);
     window.addEventListener('ptq:wave-director-updated', handleWaveUpdate as EventListener);
+    window.addEventListener('ptq:coins-updated', checkStorageRewards as EventListener);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener('ptq:wave-director-updated', handleWaveUpdate as EventListener);
+      window.removeEventListener('ptq:coins-updated', checkStorageRewards as EventListener);
     };
   }, []);
 
   return (
     <>
       {children}
-      <div className="pointer-events-none fixed right-3 top-20 z-[90] flex w-[min(22rem,calc(100vw-1.5rem))] flex-col gap-3">
+      <div className="pointer-events-none fixed right-3 top-20 z-[90] flex w-[min(20rem,calc(100vw-1.5rem))] flex-col gap-3">
         {toasts.map((toast) => (
           <div
             key={toast.id}
