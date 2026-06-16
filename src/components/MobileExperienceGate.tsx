@@ -34,11 +34,11 @@ function applyDeviceMode(mode: DeviceMode) {
 }
 
 export default function MobileExperienceGate({ children }: MobileExperienceGateProps) {
-  const initialMode = useMemo(() => detectDeviceMode(), []);
-
-  // Apply synchronously during the first render so GameArea reads the correct
-  // localStorage control mode when it initializes its own state.
-  applyDeviceMode(initialMode);
+  useMemo(() => {
+    const initialMode = detectDeviceMode();
+    applyDeviceMode(initialMode);
+    return initialMode;
+  }, []);
 
   useEffect(() => {
     const syncMode = () => {
