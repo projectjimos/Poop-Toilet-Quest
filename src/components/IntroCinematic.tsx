@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Coins, FastForward, Sparkles, Timer, Zap } from 'lucide-react';
 
 type IntroCinematicProps = {
@@ -19,12 +19,12 @@ export default function IntroCinematic({ children }: IntroCinematicProps) {
     {
       icon: <Zap className="w-4 h-4" />,
       title: 'React Fast',
-      detail: 'Dodge boss attacks and time your magic wave.'
+      detail: 'Dodge boss attacks and time your magic flush wave.'
     },
     {
       icon: <Sparkles className="w-4 h-4" />,
       title: 'Beat Bosses',
-      detail: 'Use magic power to push back Titans and Germ Kings.'
+      detail: 'Face Plunger Titans, Germ Kings, and wild sewer monsters.'
     },
     {
       icon: <Coins className="w-4 h-4" />,
@@ -69,12 +69,12 @@ export default function IntroCinematic({ children }: IntroCinematicProps) {
 
     const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
     const timers: ReturnType<typeof setTimeout>[] = [];
-    const beatDelays = isProfileActivation ? [420, 1050, 1750, 2500] : [700, 1700, 2850, 4100];
-    const durationMs = isProfileActivation ? 5200 : 7600;
+    const beatDelays = isProfileActivation ? [360, 920, 1500, 2180] : [650, 1600, 2650, 3850];
+    const durationMs = isProfileActivation ? 4700 : 6900;
 
     if (prefersReducedMotion) {
       setBeat(objectives.length);
-      timers.push(setTimeout(finishIntro, 1800));
+      timers.push(setTimeout(finishIntro, 1500));
     } else {
       beatDelays.forEach((delay, index) => {
         timers.push(setTimeout(() => setBeat(index + 1), delay));
@@ -127,7 +127,7 @@ export default function IntroCinematic({ children }: IntroCinematicProps) {
                 <div className="intro-hero-shadow" />
                 <div className="intro-hero-emoji">💩</div>
                 <div className="intro-hero-wand">✨</div>
-                <div className="intro-hero-badge">MAGE LVL ?</div>
+                <div className="intro-hero-badge">HERO LVL ?</div>
               </div>
               <div className="intro-coin intro-coin-one">🪙</div>
               <div className="intro-coin intro-coin-two">🪙</div>
@@ -139,16 +139,16 @@ export default function IntroCinematic({ children }: IntroCinematicProps) {
 
           <div className="order-1 lg:order-2 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-cyan-200 mb-4">
-              {isProfileActivation ? 'Quest activated' : 'Short movie intro'}
+              {isProfileActivation ? 'Quest activated' : 'Movie intro'}
             </div>
             <h1 id="intro-title" className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[0.92] uppercase">
-              <span className="block bg-gradient-to-r from-amber-200 via-orange-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-sm">Magic Hero</span>
-              <span className="block text-slate-50">Boss Showdown</span>
+              <span className="block bg-gradient-to-r from-amber-200 via-orange-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-sm">Poop Toilet</span>
+              <span className="block text-slate-50">Quest</span>
             </h1>
             <p id="intro-subtitle" className="mt-4 text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl mx-auto lg:mx-0">
               {isProfileActivation
-                ? 'Your quest is live: beat bosses, grab coins, sell weak toilets, and reveal unknown upgrades.'
-                : 'A magic hero faces sewer bosses, collects coins, sells weak toilets, and reveals unknown toilets to level up fast.'}
+                ? 'Your run is live: react fast, beat bosses, grab coins, sell weak toilets, and reveal unknown upgrades.'
+                : 'A magic poop hero enters the sewer arena, faces giant bosses, collects coins, and reveals unknown toilets to level up fast.'}
             </p>
             <div className="mt-6 grid sm:grid-cols-2 gap-3">
               {objectives.map((objective, index) => {
