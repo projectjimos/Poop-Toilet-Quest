@@ -12,7 +12,19 @@ interface WaveBanner {
   subtitle: string;
 }
 
+type WaveSnapshot = {
+  currentWave: number;
+  targetQuota: number;
+  spawnedThisWave: number;
+  liveEnemies: number;
+  remainingSpawns: number;
+  bossRequired: boolean;
+  bossDefeated: boolean;
+};
+
 const WAVE_LABEL_PATTERN = /Poop Crusader\s*Level\s*(\d+)/i;
+const WAVE_RUNTIME_KEY = '__ptqWaveClearRuntime';
+const WAVE_UPDATE_EVENT = 'ptq:wave-director-updated';
 
 const getVisibleWave = (): number | null => {
   const text = document.body?.innerText || '';
@@ -20,6 +32,20 @@ const getVisibleWave = (): number | null => {
   if (!match) return null;
   const parsed = Number.parseInt(match[1], 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getRuntimeSnapshot = (): WaveSnapshot | null => {
+  const runtime = ((window as unknown as Record<string, any>)[WAVE_RUNTIME_KEY]);
+  if (!runtime?.active || !Number.isFinite(runtime.currentWave)) return null;
+  return {
+    currentWave: runtime.currentWave,
+    targetQuota: runtime.targetQuota || 0,
+    spawnedThisWave: runtime.spawnedThisWave || 0,
+    liveEnemies: runtime.liveEnemies || 0,
+    remainingSpawns: Math.max(0, (runtime.targetQuota || 0) - (runtime.spawnedThisWave || 0)),
+    bossRequired: Boolean(runtime.bossRequired),
+    bossDefeated: Boolean(runtime.bossDefeated)
+  };
 };
 
 const isGameActivelyPlaying = (): boolean => {
@@ -37,7 +63,7 @@ const makeBanner = (wave: number): WaveBanner => {
       wave,
       kind: 'boss',
       title: `EXTREME BOSS WAVE ${wave}`,
-      subtitle: 'A huge sewer boss is entering. Dodge fast, save utilities, and time your flushes.'
+      subtitle: 'Clear every monster and defeat the crowned bacteria boss before the next wave unlocks.'
     };
   }
 
@@ -46,8 +72,8 @@ const makeBanner = (wave: number): WaveBanner => {
     kind: 'normal',
     title: `WAVE ${wave}`,
     subtitle: wave === 1
-      ? 'Clear the first group, collect coins, and survive.'
-      : 'More opponents are joining. Clear the arena and keep upgrading.'
+      ? 'Clear every monster in this wave before wave 2 opens.'
+      : 'More opponents are joining. The next wave only opens after the arena is clear.'
   };
 };
 
@@ -55,6 +81,7 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
   const [banner, setBanner] = useState<WaveBanner | null>(null);
   const [activeWave, setActiveWave] = useState<number>(1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [snapshot, setSnapshot] = useState<WaveSnapshot | null>(null);
   const lastAnnouncedWaveRef = useRef<number | null>(null);
   const bannerTimerRef = useRef<number | null>(null);
 
@@ -75,30 +102,49 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
       bannerTimerRef.current = window.setTimeout(() => setBanner(null), nextBanner.kind === 'boss' ? 4200 : 3000);
     };
 
-    const interval = window.setInterval(() => {
+    const applySnapshot = (nextSnapshot: WaveSnapshot | null) => {
       const playingNow = isGameActivelyPlaying();
       setIsPlaying(playingNow);
 
-      const wave = getVisibleWave();
-      if (!playingNow || !wave) {
-        return;
-      }
+      const wave = nextSnapshot?.currentWave || getVisibleWave();
+      setSnapshot(nextSnapshot);
+
+      if (!playingNow || !wave) return;
 
       setActiveWave(wave);
-
       if (lastAnnouncedWaveRef.current !== wave) {
         lastAnnouncedWaveRef.current = wave;
         showWaveBanner(wave);
       }
+    };
+
+    const handleWaveUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<WaveSnapshot>).detail;
+      if (detail?.currentWave) {
+        applySnapshot(detail);
+      }
+    };
+
+    window.addEventListener(WAVE_UPDATE_EVENT, handleWaveUpdate);
+
+    const interval = window.setInterval(() => {
+      applySnapshot(getRuntimeSnapshot());
     }, 350);
 
     return () => {
+      window.removeEventListener(WAVE_UPDATE_EVENT, handleWaveUpdate);
       window.clearInterval(interval);
       if (bannerTimerRef.current) {
         window.clearTimeout(bannerTimerRef.current);
       }
     };
   }, []);
+
+  const liveCount = snapshot?.liveEnemies ?? 0;
+  const targetQuota = snapshot?.targetQuota ?? 0;
+  const spawned = snapshot?.spawnedThisWave ?? 0;
+  const remainingSpawns = snapshot?.remainingSpawns ?? 0;
+  const bossLocked = Boolean(snapshot?.bossRequired && !snapshot?.bossDefeated);
 
   return (
     <>
@@ -114,7 +160,8 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
               </div>
               <div className="text-right text-[10px] leading-tight text-slate-300">
                 <div>{activeWave % 5 === 0 ? 'Boss round' : 'Clear round'}</div>
-                <div className="text-slate-500">More opponents each wave</div>
+                <div className="text-slate-400">Live {liveCount} • Spawned {spawned}/{targetQuota}</div>
+                <div className="text-slate-500">{remainingSpawns > 0 ? `${remainingSpawns} more incoming` : bossLocked ? 'Boss must fall' : 'Clear remaining monsters'}</div>
               </div>
             </div>
           </div>
@@ -136,7 +183,7 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
               <div className="mt-5 grid grid-cols-3 gap-2 text-[10px] sm:text-xs font-mono uppercase tracking-wider text-slate-300">
                 <div className="rounded-xl bg-white/5 border border-white/10 py-2">Dodge</div>
                 <div className="rounded-xl bg-white/5 border border-white/10 py-2">Flush</div>
-                <div className="rounded-xl bg-white/5 border border-white/10 py-2">Collect</div>
+                <div className="rounded-xl bg-white/5 border border-white/10 py-2">Clear all</div>
               </div>
             </div>
           </div>
