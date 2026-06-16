@@ -12,6 +12,7 @@ import IntroCinematic from './components/IntroCinematic.tsx';
 import JuiceLayerGate from './components/JuiceLayerGate.tsx';
 import MobileControlsFixGate from './components/MobileControlsFixGate.tsx';
 import MobileExperienceGate from './components/MobileExperienceGate.tsx';
+import PlayButtonFixGate from './components/PlayButtonFixGate.tsx';
 import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import UtilityPanelVisibilityGate from './components/UtilityPanelVisibilityGate.tsx';
 import WaterSystemGate from './components/WaterSystemGate.tsx';
@@ -34,7 +35,9 @@ createRoot(document.getElementById('root')!).render(
                         <WaveBossDirectorGate>
                           <JuiceLayerGate>
                             <MobileControlsFixGate>
-                              <App />
+                              <PlayButtonFixGate>
+                                <App />
+                              </PlayButtonFixGate>
                             </MobileControlsFixGate>
                           </JuiceLayerGate>
                         </WaveBossDirectorGate>
