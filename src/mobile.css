@@ -89,6 +89,116 @@ html.ptq-mobile .cowband-soundtrack p {
   display: none;
 }
 
+/* Reliable mobile controls layer. It sends WASD/flush events into the existing game loop. */
+html.ptq-mobile .mobile-controls-fix {
+  position: fixed;
+  inset: 0;
+  z-index: 115;
+  pointer-events: none;
+}
+
+html.ptq-mobile .mobile-controls-fix__stick {
+  position: fixed;
+  left: max(0.75rem, env(safe-area-inset-left));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem);
+  width: 7.25rem;
+  height: 7.25rem;
+  border-radius: 999px;
+  border: 2px solid rgba(34, 211, 238, 0.45);
+  background: radial-gradient(circle, rgba(14, 116, 144, 0.35), rgba(15, 23, 42, 0.72));
+  box-shadow: 0 0 34px rgba(8, 145, 178, 0.35), inset 0 0 22px rgba(15, 23, 42, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  pointer-events: auto;
+  user-select: none;
+}
+
+html.ptq-mobile .mobile-controls-fix__stick--active {
+  border-color: rgba(125, 211, 252, 0.9);
+  box-shadow: 0 0 44px rgba(56, 189, 248, 0.55), inset 0 0 28px rgba(14, 165, 233, 0.24);
+}
+
+html.ptq-mobile .mobile-controls-fix__knob {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.92), rgba(180, 83, 9, 0.92));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  will-change: transform;
+  transition: transform 38ms linear;
+}
+
+html.ptq-mobile .mobile-controls-fix__hint {
+  position: absolute;
+  bottom: 0.65rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.7);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+html.ptq-mobile .mobile-controls-fix__flush {
+  position: fixed;
+  right: max(0.85rem, env(safe-area-inset-right));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 5.45rem);
+  width: 5.8rem;
+  height: 5.8rem;
+  border-radius: 999px;
+  border: 3px solid rgba(254, 202, 202, 0.75);
+  background: radial-gradient(circle at 35% 30%, #fb7185, #e11d48 60%, #881337);
+  color: white;
+  box-shadow: 0 0 34px rgba(225, 29, 72, 0.55), 0 13px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
+
+html.ptq-mobile .mobile-controls-fix__flush span {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+html.ptq-mobile .mobile-controls-fix__flush:active {
+  transform: scale(0.94);
+  filter: brightness(1.15);
+}
+
+@media (max-width: 420px) {
+  html.ptq-mobile .mobile-controls-fix__stick {
+    width: 6.55rem;
+    height: 6.55rem;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 4.75rem);
+  }
+
+  html.ptq-mobile .mobile-controls-fix__knob {
+    width: 2.95rem;
+    height: 2.95rem;
+    font-size: 1.42rem;
+  }
+
+  html.ptq-mobile .mobile-controls-fix__flush {
+    width: 5.15rem;
+    height: 5.15rem;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 4.95rem);
+  }
+}
+
 /* Mobile users should see compact panels instead of dense desktop cards. */
 @media (max-width: 640px) {
   html.ptq-mobile h1,
