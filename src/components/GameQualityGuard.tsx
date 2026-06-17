@@ -7,6 +7,18 @@ const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
 const STARTER_WATER = 500;
 const STARTER_ELECTRICITY = 500;
 
+const SOLO_ONLY_BLOCKED_TERMS = [
+  'CO-OP Arena',
+  'Quick Join',
+  'Public Showdown',
+  'Custom Room',
+  'Friends List',
+  'Keyboard Bindings for Sharing',
+  'CO-OP ON',
+  'SOLO PLAY',
+  'Start CO-OP Play'
+];
+
 type GoalState = {
   profile: string | null;
   coins: number;
@@ -55,12 +67,13 @@ function getNextGoal({ profile, coins, water, electricity }: GoalState): string 
 
 function installBackendNoiseGuard(): () => void {
   const originalFetch = window.fetch.bind(window);
+  const OriginalWebSocket = window.WebSocket;
 
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const target = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
-    if (target.includes('/api/multiplayer/status')) {
-      return Promise.resolve(new Response(JSON.stringify({ rooms: [], online: [], disabled: true }), {
+    if (target.includes('/api/multiplayer') || target.includes('/multiplayer')) {
+      return Promise.resolve(new Response(JSON.stringify({ rooms: [], online: [], disabled: true, soloOnly: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }));
@@ -69,8 +82,80 @@ function installBackendNoiseGuard(): () => void {
     return originalFetch(input, init);
   }) as typeof window.fetch;
 
+  window.WebSocket = class SoloOnlyWebSocket extends OriginalWebSocket {
+    constructor(url: string | URL, protocols?: string | string[]) {
+      const target = String(url);
+      if (target.includes('/multiplayer')) {
+        throw new Error('Solo-only mode: multiplayer sockets are disabled.');
+      }
+      super(url, protocols as any);
+    }
+  } as typeof WebSocket;
+
   return () => {
     window.fetch = originalFetch;
+    window.WebSocket = OriginalWebSocket;
+  };
+}
+
+function installSoloOnlyUiGuard(): () => void {
+  let frame = 0;
+
+  const hideElement = (element: HTMLElement) => {
+    element.setAttribute('aria-hidden', 'true');
+    element.style.setProperty('display', 'none', 'important');
+    element.style.setProperty('visibility', 'hidden', 'important');
+    element.style.setProperty('pointer-events', 'none', 'important');
+  };
+
+  const removeSoloOnlySurfaces = () => {
+    frame = 0;
+
+    const allElements = Array.from(document.querySelectorAll<HTMLElement>('button, input, a, div, span'));
+    allElements.forEach((element) => {
+      const text = (element.textContent || element.getAttribute('placeholder') || '').trim();
+      if (!text) return;
+
+      const isBlocked = SOLO_ONLY_BLOCKED_TERMS.some((term) => text.includes(term));
+      if (!isBlocked) return;
+
+      const panel =
+        element.closest('[data-solo-remove]') ||
+        element.closest('.animate-fade-in') ||
+        element.closest('div.mt-3') ||
+        element.closest('div') ||
+        element;
+
+      hideElement((panel as HTMLElement) || element);
+    });
+
+    const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
+    const selectedOldTab = tabButtons.find((button) => {
+      const text = button.textContent || '';
+      return text.includes('CO-OP Arena') && button.className.includes('bg-amber');
+    });
+
+    if (selectedOldTab) {
+      tabButtons.find((button) => (button.textContent || '').includes('Sewer Enemy'))?.click();
+    }
+  };
+
+  const scheduleRemove = () => {
+    if (frame) return;
+    frame = window.requestAnimationFrame(removeSoloOnlySurfaces);
+  };
+
+  localStorage.removeItem('poop_quest_friends');
+  scheduleRemove();
+
+  const observer = new MutationObserver(scheduleRemove);
+  observer.observe(document.body, { childList: true, subtree: true });
+  const interval = window.setInterval(scheduleRemove, 3000);
+
+  return () => {
+    if (frame) window.cancelAnimationFrame(frame);
+    observer.disconnect();
+    window.clearInterval(interval);
   };
 }
 
@@ -88,6 +173,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => installBackendNoiseGuard(), []);
+  useEffect(() => installSoloOnlyUiGuard(), []);
 
   useEffect(() => {
     const syncGoalState = () => setGoalState(readGoalState());
