@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { playBossAppearsSound, playWaveCompleteSound } from '../utils/audio';
+import { playWaveCompleteSound } from '../utils/audio';
 
 interface WaveBossDirectorGateProps {
   children: ReactNode;
@@ -7,7 +7,7 @@ interface WaveBossDirectorGateProps {
 
 interface WaveBanner {
   wave: number;
-  kind: 'normal' | 'boss';
+  kind: 'normal' | 'bonus';
   title: string;
   subtitle: string;
 }
@@ -20,6 +20,7 @@ type WaveSnapshot = {
   remainingSpawns: number;
   bossRequired: boolean;
   bossDefeated: boolean;
+  bonusWave?: boolean;
 };
 
 const WAVE_LABEL_PATTERN = /Poop Crusader\s*Level\s*(\d+)/i;
@@ -43,8 +44,9 @@ const getRuntimeSnapshot = (): WaveSnapshot | null => {
     spawnedThisWave: runtime.spawnedThisWave || 0,
     liveEnemies: runtime.liveEnemies || 0,
     remainingSpawns: Math.max(0, (runtime.targetQuota || 0) - (runtime.spawnedThisWave || 0)),
-    bossRequired: Boolean(runtime.bossRequired),
-    bossDefeated: Boolean(runtime.bossDefeated)
+    bossRequired: false,
+    bossDefeated: true,
+    bonusWave: runtime.currentWave % 5 === 0
   };
 };
 
@@ -57,13 +59,13 @@ const isGameActivelyPlaying = (): boolean => {
 };
 
 const makeBanner = (wave: number): WaveBanner => {
-  const isBoss = wave % 5 === 0;
-  if (isBoss) {
+  const isBonus = wave % 5 === 0;
+  if (isBonus) {
     return {
       wave,
-      kind: 'boss',
-      title: `EXTREME BOSS WAVE ${wave}`,
-      subtitle: 'Clear every monster and defeat the crowned bacteria boss before the next wave unlocks.'
+      kind: 'bonus',
+      title: `BONUS MONSTER WAVE ${wave}`,
+      subtitle: 'No boss this round. Clear the larger monster wave to unlock the next wave.'
     };
   }
 
@@ -90,16 +92,14 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
       const nextBanner = makeBanner(wave);
       setBanner(nextBanner);
 
-      if (nextBanner.kind === 'boss') {
-        playBossAppearsSound();
-      } else if (wave > 1) {
+      if (wave > 1) {
         playWaveCompleteSound();
       }
 
       if (bannerTimerRef.current) {
         window.clearTimeout(bannerTimerRef.current);
       }
-      bannerTimerRef.current = window.setTimeout(() => setBanner(null), nextBanner.kind === 'boss' ? 4200 : 3000);
+      bannerTimerRef.current = window.setTimeout(() => setBanner(null), nextBanner.kind === 'bonus' ? 3600 : 3000);
     };
 
     const applySnapshot = (nextSnapshot: WaveSnapshot | null) => {
@@ -129,7 +129,7 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
 
     const interval = window.setInterval(() => {
       applySnapshot(getRuntimeSnapshot());
-    }, 350);
+    }, 600);
 
     return () => {
       window.removeEventListener(WAVE_UPDATE_EVENT, handleWaveUpdate);
@@ -144,7 +144,7 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
   const targetQuota = snapshot?.targetQuota ?? 0;
   const spawned = snapshot?.spawnedThisWave ?? 0;
   const remainingSpawns = snapshot?.remainingSpawns ?? 0;
-  const bossLocked = Boolean(snapshot?.bossRequired && !snapshot?.bossDefeated);
+  const isBonusWave = activeWave % 5 === 0;
 
   return (
     <>
@@ -152,16 +152,16 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
 
       {isPlaying && (
         <div className="fixed left-1/2 top-3 z-[320] -translate-x-1/2 pointer-events-none px-3 w-full max-w-sm">
-          <div className={`mx-auto rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md ${activeWave % 5 === 0 ? 'bg-red-950/85 border-red-400/50 shadow-red-950/50' : 'bg-slate-950/85 border-amber-400/35 shadow-amber-950/40'}`}>
+          <div className={`mx-auto rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md ${isBonusWave ? 'bg-purple-950/85 border-fuchsia-400/50 shadow-purple-950/50' : 'bg-slate-950/85 border-amber-400/35 shadow-amber-950/40'}`}>
             <div className="flex items-center justify-between gap-3 font-mono">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.25em] text-slate-300">Current mission</div>
-                <div className={`text-sm font-black ${activeWave % 5 === 0 ? 'text-red-300' : 'text-amber-300'}`}>Wave {activeWave}</div>
+                <div className={`text-sm font-black ${isBonusWave ? 'text-fuchsia-300' : 'text-amber-300'}`}>Wave {activeWave}</div>
               </div>
               <div className="text-right text-[10px] leading-tight text-slate-300">
-                <div>{activeWave % 5 === 0 ? 'Boss round' : 'Clear round'}</div>
+                <div>{isBonusWave ? 'Bonus monster round' : 'Clear round'}</div>
                 <div className="text-slate-400">Live {liveCount} • Spawned {spawned}/{targetQuota}</div>
-                <div className="text-slate-500">{remainingSpawns > 0 ? `${remainingSpawns} more incoming` : bossLocked ? 'Boss must fall' : 'Clear remaining monsters'}</div>
+                <div className="text-slate-500">{remainingSpawns > 0 ? `${remainingSpawns} more incoming` : 'Clear remaining monsters'}</div>
               </div>
             </div>
           </div>
@@ -170,11 +170,11 @@ export default function WaveBossDirectorGate({ children }: WaveBossDirectorGateP
 
       {banner && (
         <div className="fixed inset-0 z-[340] pointer-events-none flex items-center justify-center px-4">
-          <div className={`relative max-w-xl w-full rounded-3xl border p-7 text-center shadow-2xl overflow-hidden animate-wave-pop ${banner.kind === 'boss' ? 'bg-gradient-to-br from-red-950 via-slate-950 to-purple-950 border-red-400/60 shadow-red-950/60' : 'bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950 border-amber-400/50 shadow-amber-950/50'}`}>
+          <div className={`relative max-w-xl w-full rounded-3xl border p-7 text-center shadow-2xl overflow-hidden animate-wave-pop ${banner.kind === 'bonus' ? 'bg-gradient-to-br from-purple-950 via-slate-950 to-fuchsia-950 border-fuchsia-400/60 shadow-purple-950/60' : 'bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950 border-amber-400/50 shadow-amber-950/50'}`}>
             <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_center,white,transparent_55%)]" />
             <div className="relative">
-              <div className="text-6xl mb-3">{banner.kind === 'boss' ? '👑🦠' : '🌊🚽'}</div>
-              <div className={`text-4xl sm:text-5xl font-black font-mono tracking-tight ${banner.kind === 'boss' ? 'text-red-200' : 'text-amber-200'}`}>
+              <div className="text-6xl mb-3">{banner.kind === 'bonus' ? '👾🌊' : '🌊🚽'}</div>
+              <div className={`text-4xl sm:text-5xl font-black font-mono tracking-tight ${banner.kind === 'bonus' ? 'text-fuchsia-200' : 'text-amber-200'}`}>
                 {banner.title}
               </div>
               <div className="mt-3 text-sm sm:text-base font-mono text-slate-200 leading-relaxed">
