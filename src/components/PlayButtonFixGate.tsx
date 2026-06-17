@@ -1,11 +1,44 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-const REAL_START_PATTERNS = [/Start\s+(PC|Mobile|CO-OP)\s+Play/i];
+const REAL_START_PATTERNS = [/Start\s+PC\s+Play/i, /Start\s+Mobile\s+Play/i];
 const LOBBY_PATTERNS = [/SELECT INPUT SYSTEM/i, /START ADVENTURE/i, /POOP TOILET QUEST/i];
-const PLAYING_PATTERNS = [/Current mission/i, /Wave\s+\d+/i, /Controls:\s*Touch and drag/i];
+const PLAYING_PATTERNS = [/Current mission/i, /Wave\s+\d+/i, /Controls:\s*Touch and drag/i, /Controls:\s*WASD/i];
+const PLAY_REQUESTED_EVENT = 'ptq:play-requested';
+
+type ReactHostElement = HTMLButtonElement & Record<string, unknown>;
+
+type ReactClickProps = {
+  onClick?: (event?: unknown) => void;
+  onPointerUp?: (event?: unknown) => void;
+  onTouchEnd?: (event?: unknown) => void;
+};
 
 function getBodyText(): string {
   return document.body?.innerText || '';
+}
+
+function matchesStartLabel(label: string): boolean {
+  return REAL_START_PATTERNS.some((pattern) => pattern.test(label));
+}
+
+function getButtonLabel(button: HTMLButtonElement): string {
+  return (button.innerText || button.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function findStartButton(): HTMLButtonElement | null {
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
+  return buttons.find((button) => {
+    if (button.dataset.ptqRescueButton === 'true') return false;
+    return matchesStartLabel(getButtonLabel(button));
+  }) || null;
+}
+
+function findStartButtonFromTarget(target: EventTarget | null): HTMLButtonElement | null {
+  if (!(target instanceof Element)) return null;
+  const button = target.closest('button');
+  if (!(button instanceof HTMLButtonElement)) return null;
+  if (button.dataset.ptqRescueButton === 'true') return null;
+  return matchesStartLabel(getButtonLabel(button)) ? button : null;
 }
 
 function hasRealStartButton(): boolean {
@@ -27,25 +60,44 @@ function isGamePlaying(): boolean {
   return PLAYING_PATTERNS.some((pattern) => pattern.test(text)) && !isLobbyVisible();
 }
 
-function findStartButton(): HTMLButtonElement | null {
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
-  return buttons.find((button) => {
-    if (button.dataset.ptqRescueButton === 'true') return false;
-    const label = button.innerText || button.textContent || '';
-    return REAL_START_PATTERNS.some((pattern) => pattern.test(label));
-  }) || null;
+function getReactClickProps(button: HTMLButtonElement): ReactClickProps | null {
+  const host = button as ReactHostElement;
+  const reactPropKey = Object.keys(host).find((key) => key.startsWith('__reactProps$'));
+  if (!reactPropKey) return null;
+  const props = host[reactPropKey];
+  return props && typeof props === 'object' ? (props as ReactClickProps) : null;
 }
 
-function protectStartButton(): boolean {
-  const startButton = findStartButton();
-  if (!startButton) return false;
+function createButtonEvent(button: HTMLButtonElement, source: string): unknown {
+  const nativeEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+  return {
+    type: 'click',
+    source,
+    nativeEvent,
+    target: button,
+    currentTarget: button,
+    bubbles: true,
+    cancelable: true,
+    defaultPrevented: false,
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined,
+    isDefaultPrevented: () => false,
+    isPropagationStopped: () => false,
+    persist: () => undefined,
+  };
+}
 
-  startButton.dataset.ptqStartButton = 'true';
-  startButton.style.setProperty('position', 'relative');
-  startButton.style.setProperty('z-index', '999');
-  startButton.style.setProperty('pointer-events', 'auto', 'important');
-  startButton.removeAttribute('disabled');
-  startButton.setAttribute('aria-label', 'Start Poop Toilet Quest');
+function protectStartButton(button = findStartButton()): boolean {
+  if (!button) return false;
+
+  button.dataset.ptqStartButton = 'true';
+  button.style.setProperty('position', 'relative');
+  button.style.setProperty('z-index', '10001');
+  button.style.setProperty('pointer-events', 'auto', 'important');
+  button.style.setProperty('touch-action', 'manipulation');
+  button.style.setProperty('user-select', 'none');
+  button.removeAttribute('disabled');
+  button.setAttribute('aria-label', 'Start Poop Toilet Quest');
   return true;
 }
 
@@ -56,13 +108,37 @@ function makePointerEvent(type: 'pointerdown' | 'pointerup'): Event {
   return new MouseEvent(type === 'pointerdown' ? 'mousedown' : 'mouseup', { bubbles: true, cancelable: true });
 }
 
-function clickRealStartButton(): boolean {
+function announcePlayRequest(source: string): void {
+  window.dispatchEvent(new CustomEvent(PLAY_REQUESTED_EVENT, { detail: { source } }));
+}
+
+function invokeReactStartHandler(button: HTMLButtonElement, source: string): boolean {
+  protectStartButton(button);
+  const props = getReactClickProps(button);
+  let invoked = false;
+
+  try {
+    if (typeof props?.onClick === 'function') {
+      props.onClick(createButtonEvent(button, source));
+      invoked = true;
+    }
+  } catch (error) {
+    console.warn('[PTQ] Direct start handler failed; falling back to DOM click.', error);
+  }
+
+  announcePlayRequest(source);
+  return invoked;
+}
+
+function clickRealStartButton(source = 'play-fix'): boolean {
   const startButton = findStartButton();
   if (!startButton) return false;
 
-  protectStartButton();
+  protectStartButton(startButton);
   startButton.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
   startButton.focus({ preventScroll: true });
+
+  const invokedReact = invokeReactStartHandler(startButton, source);
 
   const events: Event[] = [
     makePointerEvent('pointerdown'),
@@ -73,8 +149,8 @@ function clickRealStartButton(): boolean {
   ];
 
   events.forEach((event) => startButton.dispatchEvent(event));
-  startButton.click();
-  window.dispatchEvent(new CustomEvent('ptq:play-requested', { detail: { source: 'play-fix' } }));
+  if (!invokedReact) startButton.click();
+  announcePlayRequest(source);
   return true;
 }
 
@@ -82,6 +158,7 @@ export default function PlayButtonFixGate({ children }: { children: ReactNode })
   const [showFallback, setShowFallback] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const lastAttemptRef = useRef(0);
+  const lastDirectInvokeRef = useRef(0);
 
   useEffect(() => {
     const sync = () => {
@@ -92,7 +169,7 @@ export default function PlayButtonFixGate({ children }: { children: ReactNode })
     };
 
     sync();
-    const interval = window.setInterval(sync, 700);
+    const interval = window.setInterval(sync, 600);
     window.addEventListener('resize', sync);
     window.addEventListener('focus', sync);
 
@@ -103,13 +180,41 @@ export default function PlayButtonFixGate({ children }: { children: ReactNode })
     };
   }, []);
 
+  useEffect(() => {
+    const maybeRescueRealButtonTap = (event: Event) => {
+      const button = findStartButtonFromTarget(event.target);
+      if (!button) return;
+      protectStartButton(button);
+
+      window.setTimeout(() => {
+        if (isGamePlaying()) return;
+        if (!isLobbyVisible()) return;
+
+        const now = Date.now();
+        if (now - lastDirectInvokeRef.current < 700) return;
+        lastDirectInvokeRef.current = now;
+        invokeReactStartHandler(button, 'real-button-rescue');
+      }, 80);
+    };
+
+    document.addEventListener('click', maybeRescueRealButtonTap, true);
+    document.addEventListener('touchend', maybeRescueRealButtonTap, true);
+    document.addEventListener('pointerup', maybeRescueRealButtonTap, true);
+
+    return () => {
+      document.removeEventListener('click', maybeRescueRealButtonTap, true);
+      document.removeEventListener('touchend', maybeRescueRealButtonTap, true);
+      document.removeEventListener('pointerup', maybeRescueRealButtonTap, true);
+    };
+  }, []);
+
   const handleStart = () => {
     const now = Date.now();
     if (now - lastAttemptRef.current < 650) return;
     lastAttemptRef.current = now;
 
     setLastMessage('Starting quest...');
-    const clicked = clickRealStartButton();
+    const clicked = clickRealStartButton('force-start');
     if (!clicked) {
       setLastMessage('Start button not found yet. Close tutorial or registry, then try again.');
       return;
@@ -120,7 +225,7 @@ export default function PlayButtonFixGate({ children }: { children: ReactNode })
         setShowFallback(false);
         setLastMessage(null);
       } else {
-        setLastMessage('If it did not start, tap the center Start button once more.');
+        setLastMessage('Tap Start once more. The direct start bridge is active.');
       }
     }, 900);
   };
