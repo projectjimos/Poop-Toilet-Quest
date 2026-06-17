@@ -2,13 +2,12 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { TOILET_CATALOG } from '../data';
 import {
-  playBossAppearsSound,
   playCoinStreakSound,
   playNewToiletRevealSound,
   playWaveCompleteSound
 } from '../utils/audio';
 
-type JuiceToastKind = 'coins' | 'toilet' | 'boss' | 'wave';
+type JuiceToastKind = 'coins' | 'toilet' | 'wave';
 
 type JuiceToast = {
   id: number;
@@ -21,12 +20,13 @@ type JuiceToast = {
 type WaveDirectorDetail = {
   reason?: string;
   currentWave?: number;
+  bonusWave?: boolean;
 };
 
 const COIN_STREAK_TARGET = 5;
 const COIN_STREAK_WINDOW_MS = 2600;
-const TOAST_DURATION_MS = 2600;
-const STORAGE_SCAN_MS = 2200;
+const TOAST_DURATION_MS = 2400;
+const STORAGE_SCAN_MS = 2600;
 
 const getCookieValue = (name: string) => {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()\[\]\\/+^]/g, '\\$&')}=([^;]*)`));
@@ -57,7 +57,6 @@ const getToiletName = (id: string) => TOILET_CATALOG.find((toilet) => toilet.id 
 const toastStyles: Record<JuiceToastKind, string> = {
   coins: 'border-yellow-300/40 bg-yellow-400/15 text-yellow-100 shadow-yellow-900/25',
   toilet: 'border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100 shadow-fuchsia-900/25',
-  boss: 'border-red-300/40 bg-red-500/15 text-red-100 shadow-red-950/35',
   wave: 'border-emerald-300/40 bg-emerald-400/15 text-emerald-100 shadow-emerald-900/25'
 };
 
@@ -69,9 +68,14 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
   const lastCoinStreakSoundRef = useRef(0);
   const unlockedRef = useRef<string[] | null>(null);
   const lastWaveRef = useRef<number | null>(null);
+  const lastToastAtRef = useRef(0);
 
   const pushToast = (toast: Omit<JuiceToast, 'id'>) => {
-    const id = Date.now() + Math.random();
+    const now = Date.now();
+    if (now - lastToastAtRef.current < 600) return;
+    lastToastAtRef.current = now;
+
+    const id = now + Math.random();
     setToasts((current) => [...current.slice(-1), { ...toast, id }]);
     window.setTimeout(() => {
       setToasts((current) => current.filter((item) => item.id !== id));
@@ -103,20 +107,10 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
         playWaveCompleteSound();
         pushToast({
           kind: 'wave',
-          icon: '🏁',
-          title: `Wave ${lastWaveRef.current} cleared!`,
-          detail: `Wave ${currentWave} is live.`
+          icon: detail.bonusWave ? '💥' : '🏁',
+          title: detail.bonusWave ? `Bonus monster wave ${currentWave}!` : `Wave ${lastWaveRef.current} cleared!`,
+          detail: detail.bonusWave ? 'More enemies, bigger reward chance.' : `Wave ${currentWave} is live.`
         });
-
-        if (currentWave % 5 === 0) {
-          playBossAppearsSound();
-          pushToast({
-            kind: 'boss',
-            icon: '🚨',
-            title: 'Boss wave!',
-            detail: `Wave ${currentWave} has a crowned bacteria boss.`
-          });
-        }
 
         lastWaveRef.current = currentWave;
       }
@@ -144,7 +138,7 @@ export default function JuiceLayerGate({ children }: { children: ReactNode }) {
           expiresAt: now + COIN_STREAK_WINDOW_MS
         };
 
-        if (nextBurstCount >= COIN_STREAK_TARGET && now - lastCoinStreakSoundRef.current > 2600) {
+        if (nextBurstCount >= COIN_STREAK_TARGET && now - lastCoinStreakSoundRef.current > 3000) {
           lastCoinStreakSoundRef.current = now;
           coinBurstRef.current = { count: 0, expiresAt: now + COIN_STREAK_WINDOW_MS };
           playCoinStreakSound();
