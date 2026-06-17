@@ -7,6 +7,20 @@ const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
 const STARTER_WATER = 500;
 const STARTER_ELECTRICITY = 500;
 
+const MULTIPLAYER_UI_TEXTS = [
+  '🌐 CO-OP Arena',
+  'CO-OP Arena',
+  'Quick Join: Public Showdown',
+  'Custom Room Code/Name',
+  'Friends List',
+  'Add friends to quick-join their rooms!',
+  'CO-OP ACTIVE',
+  'Start CO-OP Play',
+  '👥 CO-OP ON',
+  'Keyboard Bindings for Sharing:',
+  'RIP CO-OP MATE',
+];
+
 type GoalState = {
   profile: string | null;
   coins: number;
@@ -105,7 +119,7 @@ function installBackendNoiseGuard(): () => void {
 
     if (target.includes('/api/multiplayer') || target.includes('/multiplayer')) {
       return Promise.resolve(new Response(JSON.stringify({ rooms: [], online: [], disabled: true, soloOnly: true }), {
-        status: 200,
+        status: 410,
         headers: { 'Content-Type': 'application/json' },
       }));
     }
@@ -134,6 +148,23 @@ function installBackendNoiseGuard(): () => void {
   };
 }
 
+function deleteLegacyMultiplayerUi(): void {
+  const targets = Array.from(document.querySelectorAll<HTMLElement>('button, a, input, textarea, [role="button"], div, span, p'));
+
+  for (const element of targets) {
+    const text = (element.textContent || '').trim();
+    const placeholder = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.placeholder : '';
+    const matches = MULTIPLAYER_UI_TEXTS.some((needle) => text === needle || text.includes(needle) || placeholder.includes(needle));
+
+    if (!matches) continue;
+
+    const removable = element.closest('button, a') || element.closest('[role="button"]') || element.closest('input') || element.closest('div');
+    if (removable instanceof HTMLElement) {
+      removable.remove();
+    }
+  }
+}
+
 export default function GameQualityGuard({ children }: { children: ReactNode }) {
   const [goalState, setGoalState] = useState<GoalState>(() => readGoalState());
   const [wasLegacyCleaned, setWasLegacyCleaned] = useState(false);
@@ -150,6 +181,18 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => installBackendNoiseGuard(), []);
+
+  useEffect(() => {
+    deleteLegacyMultiplayerUi();
+    const interval = window.setInterval(deleteLegacyMultiplayerUi, 2500);
+    window.addEventListener('ptq:play-requested', deleteLegacyMultiplayerUi);
+    window.addEventListener('ptq:wave-runtime-updated', deleteLegacyMultiplayerUi);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('ptq:play-requested', deleteLegacyMultiplayerUi);
+      window.removeEventListener('ptq:wave-runtime-updated', deleteLegacyMultiplayerUi);
+    };
+  }, []);
 
   useEffect(() => {
     const syncGoalState = () => setGoalState(readGoalState());
