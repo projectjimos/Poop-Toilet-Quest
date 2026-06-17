@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './utils/cowguyBalanceOverrides.ts';
 import App from './App.tsx';
+import AppSafetyBoundary from './components/AppSafetyBoundary.tsx';
 import CowbandSoundtrackGate from './components/CowbandSoundtrackGate.tsx';
 import CowguyRewardAccess from './components/CowguyRewardAccess.tsx';
 import FirstRunTutorialGate from './components/FirstRunTutorialGate.tsx';
@@ -21,33 +22,35 @@ import './mobile.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MobileExperienceGate>
-      <CowguyRewardAccess>
-        <IntroCinematic>
-          <SimpleRegistryGate>
-            <UtilityPanelVisibilityGate>
-              <WaterSystemGate>
-                <FirstRunTutorialGate>
-                  <GameQualityGuard>
-                    <GameRuntimeGate>
-                      <WaveBossDirectorGate>
-                        <JuiceLayerGate>
-                          <MobileControlsFixGate>
-                            <PlayButtonFixGate>
-                              <App />
-                            </PlayButtonFixGate>
-                          </MobileControlsFixGate>
-                        </JuiceLayerGate>
-                      </WaveBossDirectorGate>
-                    </GameRuntimeGate>
-                  </GameQualityGuard>
-                </FirstRunTutorialGate>
-              </WaterSystemGate>
-            </UtilityPanelVisibilityGate>
-          </SimpleRegistryGate>
-        </IntroCinematic>
-      </CowguyRewardAccess>
-    </MobileExperienceGate>
-    <CowbandSoundtrackGate>{null}</CowbandSoundtrackGate>
+    <AppSafetyBoundary>
+      <MobileExperienceGate>
+        <CowguyRewardAccess>
+          <IntroCinematic>
+            <SimpleRegistryGate>
+              <UtilityPanelVisibilityGate>
+                <WaterSystemGate>
+                  <FirstRunTutorialGate>
+                    <GameQualityGuard>
+                      <GameRuntimeGate>
+                        <WaveBossDirectorGate>
+                          <JuiceLayerGate>
+                            <MobileControlsFixGate>
+                              <PlayButtonFixGate>
+                                <App />
+                              </PlayButtonFixGate>
+                            </MobileControlsFixGate>
+                          </JuiceLayerGate>
+                        </WaveBossDirectorGate>
+                      </GameRuntimeGate>
+                    </GameQualityGuard>
+                  </FirstRunTutorialGate>
+                </WaterSystemGate>
+              </UtilityPanelVisibilityGate>
+            </SimpleRegistryGate>
+          </IntroCinematic>
+        </CowguyRewardAccess>
+      </MobileExperienceGate>
+      <CowbandSoundtrackGate>{null}</CowbandSoundtrackGate>
+    </AppSafetyBoundary>
   </StrictMode>,
 );
