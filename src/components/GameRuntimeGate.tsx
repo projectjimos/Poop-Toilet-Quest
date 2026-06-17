@@ -44,7 +44,6 @@ type GameRuntime = {
 
 const RUNTIME_KEY = '__ptqWaveClearRuntime';
 const WAVE_UPDATE_EVENT = 'ptq:wave-director-updated';
-const BOSS_DEFEATED_EVENT = 'ptq:boss-defeated';
 const COIN_EXPIRED_EVENT = 'ptq:coin-pickups-expired';
 const PLAY_REQUESTED_EVENT = 'ptq:play-requested';
 const TICK_MS = 900;
@@ -131,8 +130,8 @@ function stampCoin(coin: CoinLike, now: number): void {
 
 function getQuotaForWave(wave: number): number {
   const base = 6 + wave * 2 + Math.floor(wave / 2);
-  const bossBonus = wave % 5 === 0 ? 4 + Math.floor(wave / 5) : 0;
-  return Math.min(60, Math.max(8, base + bossBonus));
+  const bonusWaveBonus = wave % 5 === 0 ? 8 + Math.floor(wave / 5) * 2 : 0;
+  return Math.min(70, Math.max(8, base + bonusWaveBonus));
 }
 
 function resetForWave(runtime: GameRuntime, wave: number): void {
@@ -140,8 +139,8 @@ function resetForWave(runtime: GameRuntime, wave: number): void {
   runtime.targetQuota = getQuotaForWave(runtime.currentWave);
   runtime.spawnedThisWave = 0;
   runtime.liveEnemies = 0;
-  runtime.bossRequired = runtime.currentWave % 5 === 0;
-  runtime.bossDefeated = !runtime.bossRequired;
+  runtime.bossRequired = false;
+  runtime.bossDefeated = true;
   runtime.gateOpenUntil = Date.now() + 900;
 }
 
@@ -231,9 +230,10 @@ function emitUpdate(runtime: GameRuntime, reason = 'tick'): void {
       spawnedThisWave: runtime.spawnedThisWave,
       liveEnemies: runtime.liveEnemies,
       remainingSpawns: Math.max(0, runtime.targetQuota - runtime.spawnedThisWave),
-      bossRequired: runtime.bossRequired,
-      bossDefeated: runtime.bossDefeated,
-      waveClear: runtime.spawnedThisWave >= runtime.targetQuota && runtime.liveEnemies === 0 && runtime.bossDefeated
+      bossRequired: false,
+      bossDefeated: true,
+      bonusWave: runtime.currentWave % 5 === 0,
+      waveClear: runtime.spawnedThisWave >= runtime.targetQuota && runtime.liveEnemies === 0
     }
   }));
 }
@@ -245,9 +245,8 @@ function maybeAdvanceWave(runtime: GameRuntime): void {
 
   const allMonstersSpawned = runtime.spawnedThisWave >= runtime.targetQuota;
   const allMonstersCleared = runtime.liveEnemies === 0;
-  const bossCleared = !runtime.bossRequired || runtime.bossDefeated;
 
-  if (allMonstersSpawned && allMonstersCleared && bossCleared) {
+  if (allMonstersSpawned && allMonstersCleared) {
     resetForWave(runtime, runtime.currentWave + 1);
     clearTrackedEnemies(runtime);
     emitUpdate(runtime, 'wave-advanced');
@@ -338,24 +337,12 @@ export default function GameRuntimeGate({ children }: { children: ReactNode }) {
 
     runtime.owners += 1;
 
-    const handleBossDefeated = (event: Event) => {
-      const activeRuntime = getRuntime();
-      if (!activeRuntime) return;
-      const detail = (event as CustomEvent<{ wave?: number }>).detail;
-      if (detail?.wave === activeRuntime.currentWave) {
-        activeRuntime.bossDefeated = true;
-        emitUpdate(activeRuntime, 'boss-defeated');
-        maybeAdvanceWave(activeRuntime);
-      }
-    };
-
     const handlePlayRequested = () => {
       const activeRuntime = getRuntime();
       if (!activeRuntime) return;
       forceRuntimePlaying(activeRuntime, 'play-requested');
     };
 
-    window.addEventListener(BOSS_DEFEATED_EVENT, handleBossDefeated);
     window.addEventListener(PLAY_REQUESTED_EVENT, handlePlayRequested);
 
     const interval = window.setInterval(() => {
@@ -385,7 +372,6 @@ export default function GameRuntimeGate({ children }: { children: ReactNode }) {
     }, TICK_MS);
 
     return () => {
-      window.removeEventListener(BOSS_DEFEATED_EVENT, handleBossDefeated);
       window.removeEventListener(PLAY_REQUESTED_EVENT, handlePlayRequested);
       window.clearInterval(interval);
       const activeRuntime = getRuntime();
