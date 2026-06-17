@@ -7,18 +7,6 @@ const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
 const STARTER_WATER = 500;
 const STARTER_ELECTRICITY = 500;
 
-const SOLO_ONLY_BLOCKED_TERMS = [
-  'CO-OP Arena',
-  'Quick Join',
-  'Public Showdown',
-  'Custom Room',
-  'Friends List',
-  'Keyboard Bindings for Sharing',
-  'CO-OP ON',
-  'SOLO PLAY',
-  'Start CO-OP Play'
-];
-
 type GoalState = {
   profile: string | null;
   coins: number;
@@ -65,6 +53,49 @@ function getNextGoal({ profile, coins, water, electricity }: GoalState): string 
   return 'Survive longer, sell weak toilets, and push toward the next wave.';
 }
 
+function createClosedMultiplayerSocket(url: string): WebSocket {
+  const target = new EventTarget() as WebSocket & {
+    url: string;
+    readyState: number;
+    bufferedAmount: number;
+    extensions: string;
+    protocol: string;
+    binaryType: BinaryType;
+    onopen: ((this: WebSocket, ev: Event) => any) | null;
+    onclose: ((this: WebSocket, ev: CloseEvent) => any) | null;
+    onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null;
+    onerror: ((this: WebSocket, ev: Event) => any) | null;
+  };
+
+  target.url = url;
+  target.readyState = WebSocket.CLOSED;
+  target.bufferedAmount = 0;
+  target.extensions = '';
+  target.protocol = '';
+  target.binaryType = 'blob';
+  target.onopen = null;
+  target.onclose = null;
+  target.onmessage = null;
+  target.onerror = null;
+  target.send = () => undefined;
+  target.close = () => undefined;
+  target.dispatchEvent = EventTarget.prototype.dispatchEvent.bind(target);
+  target.addEventListener = EventTarget.prototype.addEventListener.bind(target) as WebSocket['addEventListener'];
+  target.removeEventListener = EventTarget.prototype.removeEventListener.bind(target) as WebSocket['removeEventListener'];
+
+  window.setTimeout(() => {
+    const closeEvent = new CloseEvent('close', {
+      code: 1000,
+      reason: 'Solo-only mode',
+      wasClean: true,
+    });
+    target.onclose?.call(target, closeEvent);
+    target.dispatchEvent(closeEvent);
+  }, 0);
+
+  return target;
+}
+
 function installBackendNoiseGuard(): () => void {
   const originalFetch = window.fetch.bind(window);
   const OriginalWebSocket = window.WebSocket;
@@ -82,80 +113,24 @@ function installBackendNoiseGuard(): () => void {
     return originalFetch(input, init);
   }) as typeof window.fetch;
 
-  window.WebSocket = class SoloOnlyWebSocket extends OriginalWebSocket {
-    constructor(url: string | URL, protocols?: string | string[]) {
-      const target = String(url);
-      if (target.includes('/multiplayer')) {
-        throw new Error('Solo-only mode: multiplayer sockets are disabled.');
-      }
-      super(url, protocols as any);
+  const SoloSafeWebSocket = function WebSocketShim(this: WebSocket, url: string | URL, protocols?: string | string[]) {
+    const target = String(url);
+    if (target.includes('/multiplayer')) {
+      return createClosedMultiplayerSocket(target);
     }
-  } as typeof WebSocket;
+    return new OriginalWebSocket(url, protocols as any);
+  } as unknown as typeof WebSocket;
+
+  SoloSafeWebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+  SoloSafeWebSocket.OPEN = OriginalWebSocket.OPEN;
+  SoloSafeWebSocket.CLOSING = OriginalWebSocket.CLOSING;
+  SoloSafeWebSocket.CLOSED = OriginalWebSocket.CLOSED;
+  SoloSafeWebSocket.prototype = OriginalWebSocket.prototype;
+  window.WebSocket = SoloSafeWebSocket;
 
   return () => {
     window.fetch = originalFetch;
     window.WebSocket = OriginalWebSocket;
-  };
-}
-
-function installSoloOnlyUiGuard(): () => void {
-  let frame = 0;
-
-  const hideElement = (element: HTMLElement) => {
-    element.setAttribute('aria-hidden', 'true');
-    element.style.setProperty('display', 'none', 'important');
-    element.style.setProperty('visibility', 'hidden', 'important');
-    element.style.setProperty('pointer-events', 'none', 'important');
-  };
-
-  const removeSoloOnlySurfaces = () => {
-    frame = 0;
-
-    const allElements = Array.from(document.querySelectorAll<HTMLElement>('button, input, a, div, span'));
-    allElements.forEach((element) => {
-      const text = (element.textContent || element.getAttribute('placeholder') || '').trim();
-      if (!text) return;
-
-      const isBlocked = SOLO_ONLY_BLOCKED_TERMS.some((term) => text.includes(term));
-      if (!isBlocked) return;
-
-      const panel =
-        element.closest('[data-solo-remove]') ||
-        element.closest('.animate-fade-in') ||
-        element.closest('div.mt-3') ||
-        element.closest('div') ||
-        element;
-
-      hideElement((panel as HTMLElement) || element);
-    });
-
-    const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
-    const selectedOldTab = tabButtons.find((button) => {
-      const text = button.textContent || '';
-      return text.includes('CO-OP Arena') && button.className.includes('bg-amber');
-    });
-
-    if (selectedOldTab) {
-      tabButtons.find((button) => (button.textContent || '').includes('Sewer Enemy'))?.click();
-    }
-  };
-
-  const scheduleRemove = () => {
-    if (frame) return;
-    frame = window.requestAnimationFrame(removeSoloOnlySurfaces);
-  };
-
-  localStorage.removeItem('poop_quest_friends');
-  scheduleRemove();
-
-  const observer = new MutationObserver(scheduleRemove);
-  observer.observe(document.body, { childList: true, subtree: true });
-  const interval = window.setInterval(scheduleRemove, 3000);
-
-  return () => {
-    if (frame) window.cancelAnimationFrame(frame);
-    observer.disconnect();
-    window.clearInterval(interval);
   };
 }
 
@@ -170,16 +145,17 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
       localStorage.setItem('poop_quest_legacy_passwords_removed', 'true');
       setWasLegacyCleaned(true);
     }
+
+    localStorage.removeItem('poop_quest_friends');
   }, []);
 
   useEffect(() => installBackendNoiseGuard(), []);
-  useEffect(() => installSoloOnlyUiGuard(), []);
 
   useEffect(() => {
     const syncGoalState = () => setGoalState(readGoalState());
     syncGoalState();
 
-    const interval = window.setInterval(syncGoalState, 1000);
+    const interval = window.setInterval(syncGoalState, 2000);
     window.addEventListener('storage', syncGoalState);
     window.addEventListener('ptq:coins-updated', syncGoalState as EventListener);
     window.addEventListener('ptq:utilities-updated', syncGoalState as EventListener);
@@ -204,7 +180,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
       {children}
 
       {goalState.profile && !isGoalDismissed && (
-        <aside className="fixed left-4 top-20 z-[75] w-[min(90vw,360px)] rounded-2xl border border-amber-400/30 bg-slate-950/95 p-4 font-mono text-slate-100 shadow-2xl shadow-amber-950/30 backdrop-blur-md">
+        <aside className="pointer-events-none fixed left-4 top-20 z-[55] w-[min(90vw,360px)] rounded-2xl border border-amber-400/30 bg-slate-950/90 p-4 font-mono text-slate-100 shadow-2xl shadow-amber-950/30 backdrop-blur-md">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Next Goal</div>
@@ -213,21 +189,16 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
             <button
               type="button"
               onClick={dismissGoal}
-              className="rounded-full border border-slate-700 px-2 py-1 text-[10px] font-black uppercase text-slate-400 transition hover:border-amber-300 hover:text-amber-200"
+              className="pointer-events-auto rounded-full border border-slate-700 px-2 py-1 text-[10px] font-black uppercase text-slate-400 transition hover:border-amber-300 hover:text-amber-200"
               aria-label="Hide next goal helper"
             >
               Hide
             </button>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] font-black uppercase tracking-wide">
-            <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-2 text-amber-200">🪙 {goalState.coins}</div>
-            <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-2 text-cyan-200">💧 {goalState.water}</div>
-            <div className="rounded-xl border border-violet-400/20 bg-violet-400/10 p-2 text-violet-200">⚡ {goalState.electricity}</div>
-          </div>
           {wasLegacyCleaned && (
-            <p className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-2 text-[10px] font-bold text-emerald-200">
-              Old local passwords were removed. Use Firebase email, Google, or guest mode only.
-            </p>
+            <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[11px] font-bold text-emerald-100">
+              Old local password data was removed. Use Google, email, or guest mode.
+            </div>
           )}
         </aside>
       )}
