@@ -13,6 +13,16 @@ const CURRENT_USER_KEY = 'poop_quest_current_user';
 const COOKIE_CONSENT_KEY = 'poop_quest_cookie_consent';
 const GUEST_PROFILE_NAME = 'Guest Player';
 
+function toError(value: unknown, fallback = 'Unknown startup error'): Error {
+  if (value instanceof Error) return value;
+  if (typeof value === 'string') return new Error(value);
+  try {
+    return new Error(JSON.stringify(value));
+  } catch {
+    return new Error(fallback);
+  }
+}
+
 function startGuestRecovery() {
   try {
     const savedProfiles = localStorage.getItem('poop_quest_profiles_list');
@@ -114,8 +124,26 @@ function BlankScreenWatch() {
 export default class AppSafetyBoundary extends Component<BoundaryProps, BoundaryState> {
   state: BoundaryState = { error: null };
 
+  private handleGlobalError = (event: ErrorEvent) => {
+    this.setState({ error: event.error instanceof Error ? event.error : new Error(event.message || 'Startup script error') });
+  };
+
+  private handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+    this.setState({ error: toError(event.reason, 'Startup promise failed') });
+  };
+
   static getDerivedStateFromError(error: Error): BoundaryState {
     return { error };
+  }
+
+  componentDidMount() {
+    window.addEventListener('error', this.handleGlobalError);
+    window.addEventListener('unhandledrejection', this.handleUnhandledRejection);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('error', this.handleGlobalError);
+    window.removeEventListener('unhandledrejection', this.handleUnhandledRejection);
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -124,7 +152,7 @@ export default class AppSafetyBoundary extends Component<BoundaryProps, Boundary
 
   render() {
     if (this.state.error) {
-      return <RecoveryPanel error={this.state.error} reason="A startup component crashed before the game could render." />;
+      return <RecoveryPanel error={this.state.error} reason="A startup component failed before the game could render." />;
     }
 
     return (
