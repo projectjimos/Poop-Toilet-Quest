@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 interface MobileControlsFixGateProps {
   children: ReactNode;
@@ -42,6 +42,16 @@ const releaseKeys = (pressed: Set<DirectionKey>) => {
   pressed.clear();
 };
 
+function isClearlyInLobbyOrMenu(): boolean {
+  const text = document.body?.innerText || '';
+  return /SELECT INPUT SYSTEM|START ADVENTURE|GAME OVER|Try Again|Return to Lobby|New Player Tutorial|Choose Your Quest Save/i.test(text);
+}
+
+function hasActiveGameSignal(): boolean {
+  const text = document.body?.innerText || '';
+  return /Current mission|Wave\s+\d+|Controls:\s*Touch and drag|Poop Crusader\s*Level/i.test(text) && !isClearlyInLobbyOrMenu();
+}
+
 export default function MobileControlsFixGate({ children }: MobileControlsFixGateProps) {
   const [isMobile, setIsMobile] = useState(() => isMobileLike());
   const [isPlaying, setIsPlaying] = useState(false);
@@ -50,10 +60,9 @@ export default function MobileControlsFixGate({ children }: MobileControlsFixGat
   const baseRef = useRef<HTMLDivElement | null>(null);
   const pressedKeysRef = useRef<Set<DirectionKey>>(new Set());
   const pointerIdRef = useRef<number | null>(null);
+  const lastPlaySignalAtRef = useRef(0);
 
   const shouldShow = isMobile && isPlaying;
-
-  const observerConfig = useMemo(() => ({ childList: true, subtree: true, characterData: true }), []);
 
   useEffect(() => {
     const syncDevice = () => setIsMobile(isMobileLike());
@@ -67,22 +76,34 @@ export default function MobileControlsFixGate({ children }: MobileControlsFixGat
   }, []);
 
   useEffect(() => {
-    const detectPlaying = () => {
-      const bodyText = document.body.innerText || '';
-      const hasActiveHud = bodyText.includes('Controls: Touch and drag') || bodyText.includes('Current mission') || bodyText.includes('Wave:');
-      const isLobby = bodyText.includes('SELECT INPUT SYSTEM') || bodyText.includes('START ADVENTURE');
-      setIsPlaying(hasActiveHud && !isLobby);
+    const showForPlay = () => {
+      lastPlaySignalAtRef.current = Date.now();
+      setIsPlaying(true);
     };
 
-    detectPlaying();
-    const observer = new MutationObserver(detectPlaying);
-    observer.observe(document.body, observerConfig);
-    const interval = window.setInterval(detectPlaying, 1200);
-    return () => {
-      observer.disconnect();
-      window.clearInterval(interval);
+    const syncPlaying = () => {
+      const recentlyStarted = Date.now() - lastPlaySignalAtRef.current < 90_000;
+      if (recentlyStarted && !isClearlyInLobbyOrMenu()) {
+        setIsPlaying(true);
+        return;
+      }
+
+      setIsPlaying(hasActiveGameSignal());
     };
-  }, [observerConfig]);
+
+    syncPlaying();
+    const interval = window.setInterval(syncPlaying, 2500);
+    window.addEventListener('ptq:play-requested', showForPlay as EventListener);
+    window.addEventListener('ptq:wave-director-updated', showForPlay as EventListener);
+    window.addEventListener('focus', syncPlaying);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('ptq:play-requested', showForPlay as EventListener);
+      window.removeEventListener('ptq:wave-director-updated', showForPlay as EventListener);
+      window.removeEventListener('focus', syncPlaying);
+    };
+  }, []);
 
   useEffect(() => {
     if (!shouldShow) {
