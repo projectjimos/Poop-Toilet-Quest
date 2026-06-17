@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './utils/cowguyBalanceOverrides.ts';
 import App from './App.tsx';
-import BossEncounterGate from './components/BossEncounterGate.tsx';
 import CowbandSoundtrackGate from './components/CowbandSoundtrackGate.tsx';
 import CowguyRewardAccess from './components/CowguyRewardAccess.tsx';
 import FirstRunTutorialGate from './components/FirstRunTutorialGate.tsx';
@@ -31,17 +30,15 @@ createRoot(document.getElementById('root')!).render(
                 <FirstRunTutorialGate>
                   <GameQualityGuard>
                     <GameRuntimeGate>
-                      <BossEncounterGate>
-                        <WaveBossDirectorGate>
-                          <JuiceLayerGate>
-                            <MobileControlsFixGate>
-                              <PlayButtonFixGate>
-                                <App />
-                              </PlayButtonFixGate>
-                            </MobileControlsFixGate>
-                          </JuiceLayerGate>
-                        </WaveBossDirectorGate>
-                      </BossEncounterGate>
+                      <WaveBossDirectorGate>
+                        <JuiceLayerGate>
+                          <MobileControlsFixGate>
+                            <PlayButtonFixGate>
+                              <App />
+                            </PlayButtonFixGate>
+                          </MobileControlsFixGate>
+                        </JuiceLayerGate>
+                      </WaveBossDirectorGate>
                     </GameRuntimeGate>
                   </GameQualityGuard>
                 </FirstRunTutorialGate>
