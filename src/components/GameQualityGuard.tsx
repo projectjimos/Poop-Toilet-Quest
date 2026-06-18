@@ -21,6 +21,24 @@ const MULTIPLAYER_UI_TEXTS = [
   'RIP CO-OP MATE',
 ];
 
+const KINETIC_SUIT_UI_TEXTS = [
+  'Kinetic Suits',
+  'Kinetic Suit',
+  'Suits',
+  'Suit Shop',
+  'Armor Shop',
+  'Armors',
+  'Armor',
+  'Shield',
+  'Shields',
+  'Energy Shield',
+  'Kinetic',
+  'Cow Suit',
+  "Cowguy's Galactic Cow Suit",
+  'Galactic Cow Suit',
+  'No Suit',
+];
+
 type GoalState = {
   profile: string | null;
   coins: number;
@@ -148,13 +166,13 @@ function installBackendNoiseGuard(): () => void {
   };
 }
 
-function deleteLegacyMultiplayerUi(): void {
+function deleteUiByText(needles: string[]): void {
   const targets = Array.from(document.querySelectorAll<HTMLElement>('button, a, input, textarea, [role="button"], div, span, p'));
 
   for (const element of targets) {
     const text = (element.textContent || '').trim();
     const placeholder = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.placeholder : '';
-    const matches = MULTIPLAYER_UI_TEXTS.some((needle) => text === needle || text.includes(needle) || placeholder.includes(needle));
+    const matches = needles.some((needle) => text === needle || text.includes(needle) || placeholder.includes(needle));
 
     if (!matches) continue;
 
@@ -162,6 +180,33 @@ function deleteLegacyMultiplayerUi(): void {
     if (removable instanceof HTMLElement) {
       removable.remove();
     }
+  }
+}
+
+function deleteLegacyMultiplayerUi(): void {
+  deleteUiByText(MULTIPLAYER_UI_TEXTS);
+}
+
+function deleteKineticSuitUi(): void {
+  deleteUiByText(KINETIC_SUIT_UI_TEXTS);
+}
+
+function removeStoredSuitProgress(): void {
+  const profile = getActiveProfile();
+  const keys = [
+    'poop_quest_unlocked_armors',
+    'poop_quest_active_armor_id',
+    'poop_quest_suit_level',
+  ];
+
+  for (const key of keys) {
+    localStorage.removeItem(key);
+  }
+
+  if (profile) {
+    localStorage.setItem(`poop_quest_unlocked_armors_${profile}`, JSON.stringify(['basic_poncho']));
+    localStorage.setItem(`poop_quest_active_armor_id_${profile}`, 'basic_poncho');
+    localStorage.setItem(`poop_quest_suit_level_${profile}`, '1');
   }
 }
 
@@ -178,19 +223,27 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     }
 
     localStorage.removeItem('poop_quest_friends');
+    removeStoredSuitProgress();
   }, []);
 
   useEffect(() => installBackendNoiseGuard(), []);
 
   useEffect(() => {
-    deleteLegacyMultiplayerUi();
-    const interval = window.setInterval(deleteLegacyMultiplayerUi, 2500);
-    window.addEventListener('ptq:play-requested', deleteLegacyMultiplayerUi);
-    window.addEventListener('ptq:wave-runtime-updated', deleteLegacyMultiplayerUi);
+    const cleanRetiredUi = () => {
+      deleteLegacyMultiplayerUi();
+      deleteKineticSuitUi();
+    };
+
+    cleanRetiredUi();
+    const interval = window.setInterval(cleanRetiredUi, 2500);
+    window.addEventListener('ptq:play-requested', cleanRetiredUi);
+    window.addEventListener('ptq:wave-runtime-updated', cleanRetiredUi);
+    window.addEventListener('ptq:coins-updated', cleanRetiredUi as EventListener);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener('ptq:play-requested', deleteLegacyMultiplayerUi);
-      window.removeEventListener('ptq:wave-runtime-updated', deleteLegacyMultiplayerUi);
+      window.removeEventListener('ptq:play-requested', cleanRetiredUi);
+      window.removeEventListener('ptq:wave-runtime-updated', cleanRetiredUi);
+      window.removeEventListener('ptq:coins-updated', cleanRetiredUi as EventListener);
     };
   }, []);
 
