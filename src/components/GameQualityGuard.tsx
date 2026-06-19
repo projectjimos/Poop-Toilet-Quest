@@ -24,19 +24,13 @@ const MULTIPLAYER_UI_TEXTS = [
 const KINETIC_SUIT_UI_TEXTS = [
   'Kinetic Suits',
   'Kinetic Suit',
-  'Suits',
   'Suit Shop',
   'Armor Shop',
-  'Armors',
-  'Armor',
-  'Shield',
-  'Shields',
   'Energy Shield',
   'Kinetic',
   'Cow Suit',
   "Cowguy's Galactic Cow Suit",
   'Galactic Cow Suit',
-  'No Suit',
 ];
 
 type GoalState = {
@@ -85,6 +79,22 @@ function getNextGoal({ profile, coins, water, electricity }: GoalState): string 
   return 'Survive longer, sell weak toilets, and push toward the next wave.';
 }
 
+function createSafeCloseEvent(): CloseEvent | Event {
+  if (typeof CloseEvent !== 'undefined') {
+    return new CloseEvent('close', {
+      code: 1000,
+      reason: 'Solo-only mode',
+      wasClean: true,
+    });
+  }
+
+  const event = new Event('close') as Event & { code?: number; reason?: string; wasClean?: boolean };
+  event.code = 1000;
+  event.reason = 'Solo-only mode';
+  event.wasClean = true;
+  return event;
+}
+
 function createClosedMultiplayerSocket(url: string): WebSocket {
   const target = new EventTarget() as WebSocket & {
     url: string;
@@ -116,12 +126,10 @@ function createClosedMultiplayerSocket(url: string): WebSocket {
   target.removeEventListener = EventTarget.prototype.removeEventListener.bind(target) as WebSocket['removeEventListener'];
 
   window.setTimeout(() => {
-    const closeEvent = new CloseEvent('close', {
-      code: 1000,
-      reason: 'Solo-only mode',
-      wasClean: true,
-    });
-    target.onclose?.call(target, closeEvent);
+    const closeEvent = createSafeCloseEvent();
+    if (closeEvent instanceof CloseEvent) {
+      target.onclose?.call(target, closeEvent);
+    }
     target.dispatchEvent(closeEvent);
   }, 0);
 
@@ -166,19 +174,23 @@ function installBackendNoiseGuard(): () => void {
   };
 }
 
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 function deleteUiByText(needles: string[]): void {
-  const targets = Array.from(document.querySelectorAll<HTMLElement>('button, a, input, textarea, [role="button"], div, span, p'));
+  const targets = Array.from(document.querySelectorAll<HTMLElement>('button, a, input, textarea, [role="button"]'));
 
   for (const element of targets) {
-    const text = (element.textContent || '').trim();
+    const text = normalizeText(element.textContent || '');
     const placeholder = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.placeholder : '';
-    const matches = needles.some((needle) => text === needle || text.includes(needle) || placeholder.includes(needle));
+    const ariaLabel = element.getAttribute('aria-label') || '';
+    const title = element.getAttribute('title') || '';
+    const searchText = `${text} ${placeholder} ${ariaLabel} ${title}`;
+    const matches = needles.some((needle) => searchText.includes(needle));
 
-    if (!matches) continue;
-
-    const removable = element.closest('button, a') || element.closest('[role="button"]') || element.closest('input') || element.closest('div');
-    if (removable instanceof HTMLElement) {
-      removable.remove();
+    if (matches) {
+      element.remove();
     }
   }
 }
@@ -235,7 +247,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     };
 
     cleanRetiredUi();
-    const interval = window.setInterval(cleanRetiredUi, 2500);
+    const interval = window.setInterval(cleanRetiredUi, 5000);
     window.addEventListener('ptq:play-requested', cleanRetiredUi);
     window.addEventListener('ptq:wave-runtime-updated', cleanRetiredUi);
     window.addEventListener('ptq:coins-updated', cleanRetiredUi as EventListener);
@@ -251,7 +263,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     const syncGoalState = () => setGoalState(readGoalState());
     syncGoalState();
 
-    const interval = window.setInterval(syncGoalState, 2000);
+    const interval = window.setInterval(syncGoalState, 3000);
     window.addEventListener('storage', syncGoalState);
     window.addEventListener('ptq:coins-updated', syncGoalState as EventListener);
     window.addEventListener('ptq:utilities-updated', syncGoalState as EventListener);
