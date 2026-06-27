@@ -4,9 +4,7 @@ import './utils/cowguyBalanceOverrides.ts';
 import App from './App.tsx';
 import AppSafetyBoundary from './components/AppSafetyBoundary.tsx';
 import GameQualityGuard from './components/GameQualityGuard.tsx';
-import MobileControlsFixGate from './components/MobileControlsFixGate.tsx';
 import MobileExperienceGate from './components/MobileExperienceGate.tsx';
-import PlayButtonFixGate from './components/PlayButtonFixGate.tsx';
 import SimpleRegistryGate from './components/SimpleRegistryGate.tsx';
 import './index.css';
 import './mobile.css';
@@ -22,11 +20,7 @@ createRoot(document.getElementById('root')!).render(
       <MobileExperienceGate>
         <SimpleRegistryGate>
           <GameQualityGuard>
-            <MobileControlsFixGate>
-              <PlayButtonFixGate>
-                <App />
-              </PlayButtonFixGate>
-            </MobileControlsFixGate>
+            <App />
           </GameQualityGuard>
         </SimpleRegistryGate>
       </MobileExperienceGate>
