@@ -110,7 +110,7 @@ function createClosedMultiplayerSocket(url: string): WebSocket {
 
   window.setTimeout(() => {
     const closeEvent = createSafeCloseEvent();
-    if (closeEvent instanceof CloseEvent) {
+    if (typeof CloseEvent !== 'undefined' && closeEvent instanceof CloseEvent) {
       target.onclose?.call(target, closeEvent);
     }
     target.dispatchEvent(closeEvent);
