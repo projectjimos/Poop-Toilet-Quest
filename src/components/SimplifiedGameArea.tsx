@@ -7,60 +7,11 @@ import { playCoinSound, playDamageSound, playFlushSound, playUnlockSound } from 
 type GameState = 'lobby' | 'playing' | 'gameover';
 type ControlMode = 'pc' | 'mobile';
 
-type Enemy = {
-  id: string;
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  speed: number;
-  size: number;
-  emoji: string;
-  name: string;
-  value: number;
-};
-
-type Coin = {
-  id: string;
-  x: number;
-  y: number;
-  size: number;
-  value: number;
-  wobble: number;
-};
-
-type Fruit = {
-  id: string;
-  x: number;
-  y: number;
-  emoji: string;
-  heal: number;
-  size: number;
-  wobble: number;
-};
-
-type Particle = {
-  id: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  text: string;
-  color: string;
-};
-
-type Player = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  hp: number;
-  maxHp: number;
-  size: number;
-  speed: number;
-};
+type Enemy = { id: string; x: number; y: number; hp: number; maxHp: number; speed: number; size: number; emoji: string; name: string; value: number };
+type Coin = { id: string; x: number; y: number; size: number; value: number; wobble: number };
+type Fruit = { id: string; x: number; y: number; emoji: string; heal: number; size: number; wobble: number };
+type Particle = { id: string; x: number; y: number; vx: number; vy: number; life: number; maxLife: number; text: string; color: string };
+type Player = { x: number; y: number; vx: number; vy: number; hp: number; maxHp: number; size: number; speed: number };
 
 type Runtime = {
   player: Player;
@@ -143,28 +94,12 @@ function distance(ax: number, ay: number, bx: number, by: number) {
 }
 
 function spawnCoin(worldSize = WORLD_SIZE): Coin {
-  return {
-    id: randomId('coin'),
-    x: 70 + Math.random() * (worldSize - 140),
-    y: 70 + Math.random() * (worldSize - 140),
-    size: 15,
-    value: 1,
-    wobble: Math.random() * Math.PI * 2,
-  };
+  return { id: randomId('coin'), x: 70 + Math.random() * (worldSize - 140), y: 70 + Math.random() * (worldSize - 140), size: 15, value: 1, wobble: Math.random() * Math.PI * 2 };
 }
 
 function makeRuntime(): Runtime {
   return {
-    player: {
-      x: WORLD_SIZE / 2,
-      y: WORLD_SIZE / 2,
-      vx: 0,
-      vy: 0,
-      hp: 100,
-      maxHp: 100,
-      size: 28,
-      speed: 250,
-    },
+    player: { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, size: 28, speed: 250 },
     enemies: [],
     coins: Array.from({ length: 10 }, () => spawnCoin()),
     fruits: [],
@@ -184,6 +119,123 @@ function makeRuntime(): Runtime {
   };
 }
 
+function drawMinimap(ctx: CanvasRenderingContext2D, runtime: Runtime, width: number, activeToilet: Toilet) {
+  const mapSize = Math.min(158, Math.max(118, Math.floor(width * 0.22)));
+  const padding = 16;
+  const x = width - mapSize - padding;
+  const y = padding;
+  const scale = mapSize / runtime.worldSize;
+  const player = runtime.player;
+  const range = activeToilet.flushRadius;
+  const enemiesInRange = runtime.enemies.filter((enemy) => distance(player.x, player.y, enemy.x, enemy.y) <= range + enemy.size);
+  const dangerEnemies = runtime.enemies.filter((enemy) => distance(player.x, player.y, enemy.x, enemy.y) <= 260 + enemy.size);
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+  ctx.strokeStyle = enemiesInRange.length > 0 ? '#fbbf24' : dangerEnemies.length > 0 ? '#fb7185' : '#38bdf8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, mapSize, mapSize, 14);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x + 6, y + 22, mapSize - 12, mapSize - 28, 10);
+  ctx.clip();
+  ctx.fillStyle = '#07111f';
+  ctx.fillRect(x + 6, y + 22, mapSize - 12, mapSize - 28);
+
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const gx = x + 6 + ((mapSize - 12) * i) / 4;
+    const gy = y + 22 + ((mapSize - 28) * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(gx, y + 22);
+    ctx.lineTo(gx, y + mapSize - 6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 6, gy);
+    ctx.lineTo(x + mapSize - 6, gy);
+    ctx.stroke();
+  }
+
+  const mapX = (worldX: number) => x + 6 + worldX * scale * ((mapSize - 12) / mapSize);
+  const mapY = (worldY: number) => y + 22 + worldY * scale * ((mapSize - 28) / mapSize);
+  const px = mapX(player.x);
+  const py = mapY(player.y);
+  const rangeRadius = Math.max(8, range * scale * ((mapSize - 12) / mapSize));
+
+  ctx.strokeStyle = enemiesInRange.length > 0 ? 'rgba(251, 191, 36, 0.75)' : 'rgba(56, 189, 248, 0.42)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(px, py, rangeRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  for (const coin of runtime.coins) {
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(mapX(coin.x), mapY(coin.y), 1.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const fruit of runtime.fruits) {
+    ctx.fillStyle = '#34d399';
+    ctx.beginPath();
+    ctx.arc(mapX(fruit.x), mapY(fruit.y), 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const enemy of runtime.enemies) {
+    const ex = mapX(enemy.x);
+    const ey = mapY(enemy.y);
+    const inRange = distance(player.x, player.y, enemy.x, enemy.y) <= range + enemy.size;
+    const close = distance(player.x, player.y, enemy.x, enemy.y) <= 260 + enemy.size;
+    ctx.fillStyle = inRange ? '#fbbf24' : close ? '#fb7185' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(ex, ey, inRange ? 4.1 : close ? 3.6 : 2.8, 0, Math.PI * 2);
+    ctx.fill();
+    if (inRange) {
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = '#22c55e';
+  ctx.strokeStyle = '#ecfeff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '900 10px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('MINIMAP', x + 10, y + 12);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = enemiesInRange.length > 0 ? '#fbbf24' : dangerEnemies.length > 0 ? '#fb7185' : '#67e8f9';
+  ctx.fillText(`${enemiesInRange.length} IN RANGE`, x + mapSize - 9, y + 12);
+
+  const bannerY = y + mapSize + 6;
+  ctx.fillStyle = enemiesInRange.length > 0 ? 'rgba(251, 191, 36, 0.94)' : dangerEnemies.length > 0 ? 'rgba(251, 113, 133, 0.92)' : 'rgba(8, 47, 73, 0.92)';
+  ctx.beginPath();
+  ctx.roundRect(x, bannerY, mapSize, 23, 9);
+  ctx.fill();
+  ctx.fillStyle = enemiesInRange.length > 0 ? '#1e293b' : '#e0f2fe';
+  ctx.font = '900 10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(enemiesInRange.length > 0 ? 'FLUSH NOW!' : dangerEnemies.length > 0 ? 'ENEMY CLOSE!' : 'AREA CLEAR', x + mapSize / 2, bannerY + 12);
+  ctx.restore();
+}
+
 export default function SimplifiedGameArea({
   coins,
   addCoins,
@@ -197,8 +249,6 @@ export default function SimplifiedGameArea({
   highScore,
   onHighScoreChange,
   poopLevel,
-  setPoopLevel,
-  currentUser,
 }: SimplifiedGameAreaProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -207,13 +257,10 @@ export default function SimplifiedGameArea({
   const joystickRef = useRef({ active: false, startX: 0, startY: 0, x: 0, y: 0 });
   const animationRef = useRef<number | null>(null);
   const latestToiletRef = useRef(activeToilet);
-  const latestScoreRef = useRef(0);
   const pendingCoinSoundRef = useRef(false);
 
   const [gameState, setGameState] = useState<GameState>('lobby');
-  const [controlMode, setControlMode] = useState<ControlMode>(() => {
-    return (localStorage.getItem('poop_quest_control_mode') as ControlMode) || 'pc';
-  });
+  const [controlMode, setControlMode] = useState<ControlMode>(() => (localStorage.getItem('poop_quest_control_mode') as ControlMode) || 'pc');
   const [score, setScore] = useState(0);
   const [wave, setWave] = useState(1);
   const [playerHp, setPlayerHp] = useState(100);
@@ -221,22 +268,12 @@ export default function SimplifiedGameArea({
   const [flushCooldownMs, setFlushCooldownMs] = useState(0);
   const [shopOpen, setShopOpen] = useState(false);
 
-  const shopToilets = useMemo(() => {
-    const base = TOILET_CATALOG.filter((toilet) => toilet.id !== 'cowguy_throne').slice(0, SHOP_TOILET_LIMIT);
-    return base;
-  }, []);
-
-  const nextLockedToilet = useMemo(() => {
-    return shopToilets.find((toilet) => !unlockedToilets.includes(toilet.id));
-  }, [shopToilets, unlockedToilets]);
+  const shopToilets = useMemo(() => TOILET_CATALOG.filter((toilet) => toilet.id !== 'cowguy_throne').slice(0, SHOP_TOILET_LIMIT), []);
+  const nextLockedToilet = useMemo(() => shopToilets.find((toilet) => !unlockedToilets.includes(toilet.id)), [shopToilets, unlockedToilets]);
 
   useEffect(() => {
     latestToiletRef.current = activeToilet;
   }, [activeToilet]);
-
-  useEffect(() => {
-    latestScoreRef.current = score;
-  }, [score]);
 
   useEffect(() => {
     localStorage.setItem('poop_quest_control_mode', controlMode);
@@ -244,29 +281,15 @@ export default function SimplifiedGameArea({
 
   const pushParticle = useCallback((text: string, x: number, y: number, color = '#fbbf24') => {
     const runtime = runtimeRef.current;
-    runtime.particles.push({
-      id: randomId('fx'),
-      x,
-      y,
-      vx: (Math.random() - 0.5) * 40,
-      vy: -55 - Math.random() * 35,
-      life: 0,
-      maxLife: 650,
-      text,
-      color,
-    });
-    if (runtime.particles.length > MAX_PARTICLES) {
-      runtime.particles.splice(0, runtime.particles.length - MAX_PARTICLES);
-    }
+    runtime.particles.push({ id: randomId('fx'), x, y, vx: (Math.random() - 0.5) * 40, vy: -55 - Math.random() * 35, life: 0, maxLife: 650, text, color });
+    if (runtime.particles.length > MAX_PARTICLES) runtime.particles.splice(0, runtime.particles.length - MAX_PARTICLES);
   }, []);
 
   const spawnEnemy = useCallback((now: number) => {
     const runtime = runtimeRef.current;
     if (!runtime.active || runtime.enemies.length >= MAX_ENEMIES) return;
-
     const maxEnemiesForWave = clamp(5 + runtime.wave * 2, 7, MAX_ENEMIES);
     if (runtime.enemies.length >= maxEnemiesForWave) return;
-
     const spawnEvery = clamp(1400 - runtime.wave * 90 - poopLevel * 20, 520, 1400);
     if (now - runtime.lastEnemySpawnMs < spawnEvery) return;
     runtime.lastEnemySpawnMs = now;
@@ -276,7 +299,6 @@ export default function SimplifiedGameArea({
     const distFromPlayer = 430 + Math.random() * 180;
     const poolIndex = Math.min(ENEMY_POOL.length - 1, Math.floor((runtime.wave - 1) / 3));
     const template = ENEMY_POOL[Math.floor(Math.random() * (poolIndex + 1))];
-
     runtime.enemies.push({
       id: randomId('enemy'),
       x: clamp(player.x + Math.cos(angle) * distFromPlayer, 35, runtime.worldSize - 35),
@@ -295,25 +317,14 @@ export default function SimplifiedGameArea({
     const runtime = runtimeRef.current;
     const toilet = latestToiletRef.current;
     if (!runtime.active || runtime.player.hp <= 0 || runtime.flushCooldownMs > 0) return;
-
     runtime.flushCooldownMs = toilet.cooldownMs;
-    runtime.flushPulse = {
-      x: runtime.player.x,
-      y: runtime.player.y,
-      radius: 20,
-      maxRadius: toilet.flushRadius,
-      color: toilet.pulseColor,
-      emoji: toilet.emoji,
-    };
-
+    runtime.flushPulse = { x: runtime.player.x, y: runtime.player.y, radius: 20, maxRadius: toilet.flushRadius, color: toilet.pulseColor, emoji: toilet.emoji };
     for (const enemy of runtime.enemies) {
-      const hitDistance = distance(runtime.player.x, runtime.player.y, enemy.x, enemy.y);
-      if (hitDistance <= toilet.flushRadius + enemy.size) {
+      if (distance(runtime.player.x, runtime.player.y, enemy.x, enemy.y) <= toilet.flushRadius + enemy.size) {
         enemy.hp -= toilet.damage;
         pushParticle(`-${toilet.damage}`, enemy.x, enemy.y - 20, toilet.pulseColor);
       }
     }
-
     if (!isMuted) playFlushSound();
     setFlushCooldownMs(runtime.flushCooldownMs);
     window.dispatchEvent(new CustomEvent('ptq:play-requested'));
@@ -334,9 +345,7 @@ export default function SimplifiedGameArea({
     window.dispatchEvent(new CustomEvent('ptq:play-requested'));
   }, []);
 
-  const restartGame = useCallback(() => {
-    startGame(controlMode);
-  }, [controlMode, startGame]);
+  const restartGame = useCallback(() => startGame(controlMode), [controlMode, startGame]);
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
@@ -349,7 +358,6 @@ export default function SimplifiedGameArea({
     const up = (event: KeyboardEvent) => {
       keysRef.current[event.key] = false;
     };
-
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => {
@@ -361,9 +369,7 @@ export default function SimplifiedGameArea({
   useEffect(() => {
     (window as any).triggerToiletFlush = triggerFlush;
     return () => {
-      if ((window as any).triggerToiletFlush === triggerFlush) {
-        delete (window as any).triggerToiletFlush;
-      }
+      if ((window as any).triggerToiletFlush === triggerFlush) delete (window as any).triggerToiletFlush;
     };
   }, [triggerFlush]);
 
@@ -371,7 +377,6 @@ export default function SimplifiedGameArea({
     const canvas = canvasRef.current;
     const shell = shellRef.current;
     if (!canvas || !shell) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -402,7 +407,6 @@ export default function SimplifiedGameArea({
         const keys = keysRef.current;
         let mx = 0;
         let my = 0;
-
         if (keys.w || keys.W || keys.ArrowUp) my -= 1;
         if (keys.s || keys.S || keys.ArrowDown) my += 1;
         if (keys.a || keys.A || keys.ArrowLeft) mx -= 1;
@@ -427,7 +431,6 @@ export default function SimplifiedGameArea({
           player.vx *= 0.82;
           player.vy *= 0.82;
         }
-
         player.x = clamp(player.x + player.vx * dt, player.size, runtime.worldSize - player.size);
         player.y = clamp(player.y + player.vy * dt, player.size, runtime.worldSize - player.size);
 
@@ -436,26 +439,14 @@ export default function SimplifiedGameArea({
           runtime.flushPulse.radius += dtMs * 0.72;
           if (runtime.flushPulse.radius >= runtime.flushPulse.maxRadius) runtime.flushPulse = null;
         }
-
         spawnEnemy(now);
-
-        if (runtime.coins.length < MAX_COINS) {
-          runtime.coins.push(spawnCoin(runtime.worldSize));
-        }
+        if (runtime.coins.length < MAX_COINS) runtime.coins.push(spawnCoin(runtime.worldSize));
 
         if (now - runtime.lastFruitRollMs > 1000) {
           runtime.lastFruitRollMs = now;
           if (runtime.fruits.length < MAX_FRUITS && Math.random() < 0.025) {
             const fruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
-            runtime.fruits.push({
-              id: randomId('fruit'),
-              x: 80 + Math.random() * (runtime.worldSize - 160),
-              y: 80 + Math.random() * (runtime.worldSize - 160),
-              emoji: fruit.emoji,
-              heal: fruit.heal,
-              size: fruit.size,
-              wobble: Math.random() * Math.PI * 2,
-            });
+            runtime.fruits.push({ id: randomId('fruit'), x: 80 + Math.random() * (runtime.worldSize - 160), y: 80 + Math.random() * (runtime.worldSize - 160), emoji: fruit.emoji, heal: fruit.heal, size: fruit.size, wobble: Math.random() * Math.PI * 2 });
           }
         }
 
@@ -465,7 +456,6 @@ export default function SimplifiedGameArea({
           const len = Math.sqrt(dx * dx + dy * dy) || 1;
           enemy.x += (dx / len) * enemy.speed * dt;
           enemy.y += (dy / len) * enemy.speed * dt;
-
           if (len < player.size + enemy.size * 0.55) {
             player.hp -= 22 * dt;
             if (Math.random() < 0.06) pushParticle('Ouch!', player.x, player.y - 25, '#fb7185');
@@ -479,9 +469,7 @@ export default function SimplifiedGameArea({
             pushParticle(`+${enemy.value} kill`, enemy.x, enemy.y - 10, '#a7f3d0');
             runtime.coins.push(spawnCoin(runtime.worldSize));
             if (Math.random() < 0.25 && runtime.coins.length < MAX_COINS) runtime.coins.push(spawnCoin(runtime.worldSize));
-          } else {
-            remainingEnemies.push(enemy);
-          }
+          } else remainingEnemies.push(enemy);
         }
         runtime.enemies = remainingEnemies.slice(-MAX_ENEMIES);
         runtime.coins = runtime.coins.slice(-MAX_COINS);
@@ -520,7 +508,6 @@ export default function SimplifiedGameArea({
           runtime.wave = nextWave;
           pushParticle(`Wave ${nextWave}`, player.x, player.y - 55, '#fbbf24');
         }
-
         if (player.hp <= 0) {
           player.hp = 0;
           runtime.active = false;
@@ -531,7 +518,6 @@ export default function SimplifiedGameArea({
 
         runtime.cameraX = clamp(player.x - width / 2, 0, runtime.worldSize - width);
         runtime.cameraY = clamp(player.y - height / 2, 0, runtime.worldSize - height);
-
         setScore(runtime.score);
         setWave(runtime.wave);
         setPlayerHp(Math.ceil(player.hp));
@@ -546,18 +532,16 @@ export default function SimplifiedGameArea({
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, width, height);
-
       const runtimeForDraw = runtimeRef.current;
       const camX = runtimeForDraw.cameraX;
       const camY = runtimeForDraw.cameraY;
-      const toScreenX = (x: number) => x - camX;
-      const toScreenY = (y: number) => y - camY;
+      const toScreenX = (worldX: number) => worldX - camX;
+      const toScreenY = (worldY: number) => worldY - camY;
 
       ctx.save();
       ctx.translate(-camX, -camY);
       ctx.fillStyle = '#07111f';
       ctx.fillRect(0, 0, runtimeForDraw.worldSize, runtimeForDraw.worldSize);
-
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
       ctx.lineWidth = 1;
       for (let x = 0; x <= runtimeForDraw.worldSize; x += 80) {
@@ -572,7 +556,6 @@ export default function SimplifiedGameArea({
         ctx.lineTo(runtimeForDraw.worldSize, y);
         ctx.stroke();
       }
-
       ctx.lineWidth = 8;
       ctx.strokeStyle = '#ef4444';
       ctx.strokeRect(0, 0, runtimeForDraw.worldSize, runtimeForDraw.worldSize);
@@ -584,7 +567,6 @@ export default function SimplifiedGameArea({
         ctx.textBaseline = 'middle';
         ctx.fillText('🪙', coin.x, coin.y + float);
       }
-
       for (const fruit of runtimeForDraw.fruits) {
         const float = Math.sin(now / 160 + fruit.wobble) * 5;
         ctx.font = `${fruit.size + 8}px Arial`;
@@ -592,7 +574,6 @@ export default function SimplifiedGameArea({
         ctx.textBaseline = 'middle';
         ctx.fillText(fruit.emoji, fruit.x, fruit.y + float);
       }
-
       const pulse = runtimeForDraw.flushPulse;
       if (pulse) {
         ctx.save();
@@ -608,7 +589,6 @@ export default function SimplifiedGameArea({
         ctx.fillText(pulse.emoji, pulse.x, pulse.y);
         ctx.restore();
       }
-
       for (const enemy of runtimeForDraw.enemies) {
         ctx.font = `${enemy.size + 8}px Arial`;
         ctx.textAlign = 'center';
@@ -621,7 +601,6 @@ export default function SimplifiedGameArea({
         ctx.fillStyle = ratio > 0.5 ? '#22c55e' : ratio > 0.25 ? '#f59e0b' : '#ef4444';
         ctx.fillRect(enemy.x - barWidth / 2, enemy.y - enemy.size - 14, barWidth * ratio, 4);
       }
-
       const player = runtimeForDraw.player;
       ctx.font = `${player.size + 18}px Arial`;
       ctx.textAlign = 'center';
@@ -643,6 +622,8 @@ export default function SimplifiedGameArea({
         ctx.restore();
       }
 
+      drawMinimap(ctx, runtimeForDraw, width, latestToiletRef.current);
+
       if (gameState === 'lobby') {
         ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
         ctx.fillRect(0, 0, width, height);
@@ -651,7 +632,6 @@ export default function SimplifiedGameArea({
         ctx.textAlign = 'center';
         ctx.fillText('Pick PC or Mobile Play', width / 2, height / 2 - 8);
       }
-
       animationRef.current = requestAnimationFrame(drawFrame);
     };
 
@@ -687,9 +667,7 @@ export default function SimplifiedGameArea({
         <div>
           <div className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300">Solo Arcade Engine</div>
           <h3 className="text-xl font-black text-white">Move fast. Flush germs. Buy toilets.</h3>
-          <p className="mt-1 text-xs font-bold text-slate-400">
-            Co-op, multiplayer, shields, and suits are removed from this active game engine.
-          </p>
+          <p className="mt-1 text-xs font-bold text-slate-400">Top-right minimap shows enemies, nearby danger, and who is inside your flush range.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs font-black sm:flex">
           <div className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-amber-300">🪙 {coins}</div>
@@ -707,27 +685,13 @@ export default function SimplifiedGameArea({
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/75 p-5 text-center font-mono backdrop-blur-sm">
               <div className="w-full max-w-md rounded-3xl border border-amber-400/25 bg-slate-900/95 p-6 shadow-2xl">
                 <div className="text-5xl">💩🚽</div>
-                <h3 className="mt-3 text-2xl font-black uppercase text-white">
-                  {gameState === 'gameover' ? 'Quest Over' : 'Ready to Flush?'}
-                </h3>
-                <p className="mt-2 text-sm font-bold text-slate-400">
-                  {gameState === 'gameover'
-                    ? `You scored ${score} kills and collected ${sessionCoins} coins this run.`
-                    : 'Start instantly. No co-op lobby, no shield menu, no extra setup.'}
-                </p>
+                <h3 className="mt-3 text-2xl font-black uppercase text-white">{gameState === 'gameover' ? 'Quest Over' : 'Ready to Flush?'}</h3>
+                <p className="mt-2 text-sm font-bold text-slate-400">{gameState === 'gameover' ? `You scored ${score} kills and collected ${sessionCoins} coins this run.` : 'Start instantly. Watch the top-right minimap to time your flushes.'}</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => startGame('pc')}
-                    className="rounded-2xl bg-amber-400 px-5 py-4 text-sm font-black uppercase text-slate-950 shadow-xl shadow-amber-500/20 transition hover:bg-amber-300"
-                  >
+                  <button type="button" onClick={() => startGame('pc')} className="rounded-2xl bg-amber-400 px-5 py-4 text-sm font-black uppercase text-slate-950 shadow-xl shadow-amber-500/20 transition hover:bg-amber-300">
                     <Play className="mr-2 inline h-4 w-4" /> Start PC Play
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => startGame('mobile')}
-                    className="rounded-2xl border border-cyan-300/35 bg-cyan-400/15 px-5 py-4 text-sm font-black uppercase text-cyan-100 transition hover:bg-cyan-400/25"
-                  >
+                  <button type="button" onClick={() => startGame('mobile')} className="rounded-2xl border border-cyan-300/35 bg-cyan-400/15 px-5 py-4 text-sm font-black uppercase text-cyan-100 transition hover:bg-cyan-400/25">
                     <Play className="mr-2 inline h-4 w-4" /> Start Mobile Play
                   </button>
                 </div>
@@ -742,38 +706,20 @@ export default function SimplifiedGameArea({
                 onPointerDown={(event) => {
                   event.currentTarget.setPointerCapture(event.pointerId);
                   const rect = event.currentTarget.getBoundingClientRect();
-                  joystickRef.current = {
-                    active: true,
-                    startX: rect.left + rect.width / 2,
-                    startY: rect.top + rect.height / 2,
-                    x: event.clientX,
-                    y: event.clientY,
-                  };
+                  joystickRef.current = { active: true, startX: rect.left + rect.width / 2, startY: rect.top + rect.height / 2, x: event.clientX, y: event.clientY };
                 }}
                 onPointerMove={(event) => {
                   if (!joystickRef.current.active) return;
                   joystickRef.current.x = event.clientX;
                   joystickRef.current.y = event.clientY;
                 }}
-                onPointerUp={() => {
-                  joystickRef.current.active = false;
-                }}
-                onPointerCancel={() => {
-                  joystickRef.current.active = false;
-                }}
+                onPointerUp={() => { joystickRef.current.active = false; }}
+                onPointerCancel={() => { joystickRef.current.active = false; }}
               >
                 <div className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-300/25 ring-2 ring-cyan-200/30" />
                 <div className="absolute inset-x-0 bottom-3 text-center text-[10px] font-black uppercase tracking-widest text-cyan-100">Move</div>
               </div>
-
-              <button
-                type="button"
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  triggerFlush();
-                }}
-                className="pointer-events-auto h-28 w-28 rounded-full border border-amber-200/40 bg-amber-400 text-sm font-black uppercase text-slate-950 shadow-2xl shadow-amber-500/30 transition active:scale-95"
-              >
+              <button type="button" onPointerDown={(event) => { event.preventDefault(); triggerFlush(); }} className="pointer-events-auto h-28 w-28 rounded-full border border-amber-200/40 bg-amber-400 text-sm font-black uppercase text-slate-950 shadow-2xl shadow-amber-500/30 transition active:scale-95">
                 Flush
               </button>
             </div>
@@ -782,28 +728,9 @@ export default function SimplifiedGameArea({
 
         <aside className="border-t border-slate-800 bg-slate-900/80 p-4 font-mono lg:border-l lg:border-t-0">
           <div className="mb-4 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setShopOpen((open) => !open)}
-              className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-3 text-xs font-black uppercase text-amber-200 transition hover:bg-amber-400/20"
-            >
-              <ShoppingBag className="mr-1 inline h-4 w-4" /> Shop
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsMuted(!isMuted)}
-              className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-xs font-black uppercase text-slate-200 transition hover:border-slate-500"
-            >
-              {isMuted ? <VolumeX className="mr-1 inline h-4 w-4" /> : <Volume2 className="mr-1 inline h-4 w-4" />}
-              Sound
-            </button>
-            <button
-              type="button"
-              onClick={restartGame}
-              className="col-span-2 rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-3 text-xs font-black uppercase text-cyan-200 transition hover:bg-cyan-400/20"
-            >
-              <RotateCcw className="mr-1 inline h-4 w-4" /> Restart Current Mode
-            </button>
+            <button type="button" onClick={() => setShopOpen((open) => !open)} className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-3 text-xs font-black uppercase text-amber-200 transition hover:bg-amber-400/20"><ShoppingBag className="mr-1 inline h-4 w-4" /> Shop</button>
+            <button type="button" onClick={() => setIsMuted(!isMuted)} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-xs font-black uppercase text-slate-200 transition hover:border-slate-500">{isMuted ? <VolumeX className="mr-1 inline h-4 w-4" /> : <Volume2 className="mr-1 inline h-4 w-4" />} Sound</button>
+            <button type="button" onClick={restartGame} className="col-span-2 rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-3 text-xs font-black uppercase text-cyan-200 transition hover:bg-cyan-400/20"><RotateCcw className="mr-1 inline h-4 w-4" /> Restart Current Mode</button>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -812,13 +739,19 @@ export default function SimplifiedGameArea({
               <div className="text-4xl">{activeToilet.emoji}</div>
               <div>
                 <div className="text-sm font-black text-white">{activeToilet.name}</div>
-                <div className="mt-1 text-xs font-bold text-slate-400">
-                  Damage {activeToilet.damage} · Radius {activeToilet.flushRadius} · Cooldown {(activeToilet.cooldownMs / 1000).toFixed(1)}s
-                </div>
+                <div className="mt-1 text-xs font-bold text-slate-400">Damage {activeToilet.damage} · Radius {activeToilet.flushRadius} · Cooldown {(activeToilet.cooldownMs / 1000).toFixed(1)}s</div>
               </div>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
-              <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${cooldownPercent * 100}%` }} />
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${cooldownPercent * 100}%` }} /></div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-xs font-bold leading-relaxed text-slate-400">
+            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Map Legend</div>
+            <div className="mt-2 grid gap-1">
+              <span><span className="text-emerald-300">●</span> You</span>
+              <span><span className="text-rose-400">●</span> Enemy</span>
+              <span><span className="text-amber-300">●</span> Enemy inside flush range</span>
+              <span><span className="text-yellow-300">●</span> Coins · <span className="text-emerald-300">●</span> Fruit</span>
             </div>
           </div>
 
@@ -831,41 +764,10 @@ export default function SimplifiedGameArea({
                 return (
                   <div key={toilet.id} className="rounded-2xl border border-slate-800 bg-slate-950/85 p-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 gap-3">
-                        <div className="text-3xl">{toilet.emoji}</div>
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-black text-white">{toilet.name}</div>
-                          <div className="mt-1 text-[10px] font-bold text-slate-500">
-                            Cost {toilet.cost} · DMG {toilet.damage} · R {toilet.flushRadius}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={!owned && !affordable}
-                        onClick={() => buyToilet(toilet)}
-                        className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase transition ${
-                          active
-                            ? 'bg-emerald-400 text-slate-950'
-                            : owned
-                              ? 'bg-cyan-400/15 text-cyan-200 hover:bg-cyan-400/25'
-                              : affordable
-                                ? 'bg-amber-400 text-slate-950 hover:bg-amber-300'
-                                : 'cursor-not-allowed bg-slate-800 text-slate-500'
-                        }`}
-                      >
-                        {active ? 'Active' : owned ? 'Equip' : affordable ? 'Buy' : 'Need Coins'}
-                      </button>
+                      <div className="flex min-w-0 gap-3"><div className="text-3xl">{toilet.emoji}</div><div className="min-w-0"><div className="truncate text-xs font-black text-white">{toilet.name}</div><div className="mt-1 text-[10px] font-bold text-slate-500">Cost {toilet.cost} · DMG {toilet.damage} · R {toilet.flushRadius}</div></div></div>
+                      <button type="button" disabled={!owned && !affordable} onClick={() => buyToilet(toilet)} className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase transition ${active ? 'bg-emerald-400 text-slate-950' : owned ? 'bg-cyan-400/15 text-cyan-200 hover:bg-cyan-400/25' : affordable ? 'bg-amber-400 text-slate-950 hover:bg-amber-300' : 'cursor-not-allowed bg-slate-800 text-slate-500'}`}>{active ? 'Active' : owned ? 'Equip' : affordable ? 'Buy' : 'Need Coins'}</button>
                     </div>
-                    {owned && toilet.id !== 'porta_potty' && !active && (
-                      <button
-                        type="button"
-                        onClick={() => sellOwnedToilet(toilet)}
-                        className="mt-2 text-[10px] font-black uppercase text-rose-300 hover:text-rose-200"
-                      >
-                        Sell for {Math.floor(toilet.cost * 0.9)} coins
-                      </button>
-                    )}
+                    {owned && toilet.id !== 'porta_potty' && !active && <button type="button" onClick={() => sellOwnedToilet(toilet)} className="mt-2 text-[10px] font-black uppercase text-rose-300 hover:text-rose-200">Sell for {Math.floor(toilet.cost * 0.9)} coins</button>}
                   </div>
                 );
               })}
@@ -875,14 +777,8 @@ export default function SimplifiedGameArea({
           {!shopOpen && (
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-xs font-bold leading-relaxed text-slate-400">
               <div className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Next Upgrade</div>
-              {nextLockedToilet ? (
-                <p className="mt-2">
-                  Save {Math.max(0, nextLockedToilet.cost - coins)} more coins for {nextLockedToilet.emoji} {nextLockedToilet.name}.
-                </p>
-              ) : (
-                <p className="mt-2">You own every simplified shop toilet. Keep chasing higher scores.</p>
-              )}
-              <p className="mt-3">PC: WASD/Arrows + Space. Mobile: use the in-game joystick and Flush button.</p>
+              {nextLockedToilet ? <p className="mt-2">Save {Math.max(0, nextLockedToilet.cost - coins)} more coins for {nextLockedToilet.emoji} {nextLockedToilet.name}.</p> : <p className="mt-2">You own every simplified shop toilet. Keep chasing higher scores.</p>}
+              <p className="mt-3">PC: WASD/Arrows + Space. Mobile: use the joystick and Flush button.</p>
             </div>
           )}
         </aside>
