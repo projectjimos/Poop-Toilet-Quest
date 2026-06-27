@@ -1,1 +1,1 @@
-export { default } from './SimplifiedGameArea';
+export { default } from './SimplifiedGameAreaV2';
