@@ -4,8 +4,6 @@ import { getCookie } from '../utils/cookies';
 const CURRENT_USER_KEY = 'poop_quest_current_user';
 const LEGACY_PASSWORD_KEY = 'poop_quest_user_passwords';
 const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
-const STARTER_WATER = 500;
-const STARTER_ELECTRICITY = 500;
 
 const MULTIPLAYER_UI_TEXTS = [
   '🌐 CO-OP Arena',
@@ -36,8 +34,6 @@ const KINETIC_SUIT_UI_TEXTS = [
 type GoalState = {
   profile: string | null;
   coins: number;
-  water: number;
-  electricity: number;
 };
 
 function getActiveProfile(): string | null {
@@ -53,30 +49,17 @@ function readNumber(key: string, fallback: number): number {
 
 function readGoalState(): GoalState {
   const profile = getActiveProfile();
-  if (!profile) {
-    return {
-      profile: null,
-      coins: 0,
-      water: STARTER_WATER,
-      electricity: STARTER_ELECTRICITY,
-    };
-  }
-
   return {
     profile,
-    coins: readNumber(`poop_quest_coins_${profile}`, 0),
-    water: readNumber(`poop_quest_water_${profile}`, STARTER_WATER),
-    electricity: readNumber(`poop_quest_electricity_${profile}`, STARTER_ELECTRICITY),
+    coins: profile ? readNumber(`poop_quest_coins_${profile}`, 0) : 0,
   };
 }
 
-function getNextGoal({ profile, coins, water, electricity }: GoalState): string {
-  if (!profile) return 'Choose Google, email, or guest to start your quest.';
-  if (water < 50) return 'Refill water before your next big flush.';
-  if (electricity < 50) return 'Recharge electricity before your next big flush.';
-  if (coins < 15) return `Collect ${15 - coins} more coins to buy your first mystery toilet.`;
-  if (coins < 50) return 'Open the toilet shop and reveal your next upgrade.';
-  return 'Survive longer, sell weak toilets, and push toward the next wave.';
+function getNextGoal({ profile, coins }: GoalState): string {
+  if (!profile) return 'Choose Google, email, or guest to start playing.';
+  if (coins < 15) return `Collect ${15 - coins} more coins to buy your first toilet upgrade.`;
+  if (coins < 50) return 'Open the toilet shop and buy your next stronger toilet.';
+  return 'Keep moving, flush enemies, collect coins, and survive longer.';
 }
 
 function createSafeCloseEvent(): CloseEvent | Event {
@@ -195,11 +178,8 @@ function deleteUiByText(needles: string[]): void {
   }
 }
 
-function deleteLegacyMultiplayerUi(): void {
+function cleanRetiredUi(): void {
   deleteUiByText(MULTIPLAYER_UI_TEXTS);
-}
-
-function deleteKineticSuitUi(): void {
   deleteUiByText(KINETIC_SUIT_UI_TEXTS);
 }
 
@@ -241,20 +221,13 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
   useEffect(() => installBackendNoiseGuard(), []);
 
   useEffect(() => {
-    const cleanRetiredUi = () => {
-      deleteLegacyMultiplayerUi();
-      deleteKineticSuitUi();
-    };
-
     cleanRetiredUi();
-    const interval = window.setInterval(cleanRetiredUi, 5000);
+    const interval = window.setInterval(cleanRetiredUi, 7000);
     window.addEventListener('ptq:play-requested', cleanRetiredUi);
-    window.addEventListener('ptq:wave-runtime-updated', cleanRetiredUi);
     window.addEventListener('ptq:coins-updated', cleanRetiredUi as EventListener);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('ptq:play-requested', cleanRetiredUi);
-      window.removeEventListener('ptq:wave-runtime-updated', cleanRetiredUi);
       window.removeEventListener('ptq:coins-updated', cleanRetiredUi as EventListener);
     };
   }, []);
@@ -263,16 +236,14 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     const syncGoalState = () => setGoalState(readGoalState());
     syncGoalState();
 
-    const interval = window.setInterval(syncGoalState, 3000);
+    const interval = window.setInterval(syncGoalState, 5000);
     window.addEventListener('storage', syncGoalState);
     window.addEventListener('ptq:coins-updated', syncGoalState as EventListener);
-    window.addEventListener('ptq:utilities-updated', syncGoalState as EventListener);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('storage', syncGoalState);
       window.removeEventListener('ptq:coins-updated', syncGoalState as EventListener);
-      window.removeEventListener('ptq:utilities-updated', syncGoalState as EventListener);
     };
   }, []);
 
