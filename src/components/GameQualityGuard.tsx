@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getCookie } from '../utils/cookies';
 
 const CURRENT_USER_KEY = 'poop_quest_current_user';
-const LEGACY_PASSWORD_KEY = 'poop_quest_user_passwords';
 const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
 
 const MULTIPLAYER_UI_TEXTS = [
@@ -204,16 +203,9 @@ function removeStoredSuitProgress(): void {
 
 export default function GameQualityGuard({ children }: { children: ReactNode }) {
   const [goalState, setGoalState] = useState<GoalState>(() => readGoalState());
-  const [wasLegacyCleaned, setWasLegacyCleaned] = useState(false);
   const [isGoalDismissed, setIsGoalDismissed] = useState(() => localStorage.getItem(GOAL_DISMISSED_KEY) === 'true');
 
   useEffect(() => {
-    if (localStorage.getItem(LEGACY_PASSWORD_KEY) !== null) {
-      localStorage.removeItem(LEGACY_PASSWORD_KEY);
-      localStorage.setItem('poop_quest_legacy_passwords_removed', 'true');
-      setWasLegacyCleaned(true);
-    }
-
     localStorage.removeItem('poop_quest_friends');
     removeStoredSuitProgress();
   }, []);
@@ -274,11 +266,6 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
               Hide
             </button>
           </div>
-          {wasLegacyCleaned && (
-            <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[11px] font-bold text-emerald-100">
-              Old local password data was removed. Use Google, email, or guest mode.
-            </div>
-          )}
         </aside>
       )}
     </>
