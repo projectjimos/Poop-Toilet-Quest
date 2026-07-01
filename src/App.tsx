@@ -65,14 +65,11 @@ function saveLocalProfile(profile: string, payload: SavePayload) {
   localStorage.setItem(`poop_quest_highscore_${key}`, payload.highScore.toString());
 }
 
-function getInitialPlayer() {
-  return readStoredPlayer();
-}
-
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<string | null>(() => getInitialPlayer());
+  const [currentUser, setCurrentUser] = useState<string | null>(() => readStoredPlayer());
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>('idle');
+  const [isCloudSaveReady, setIsCloudSaveReady] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const [coins, setCoins] = useState(0);
@@ -97,11 +94,11 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
+      setIsCloudSaveReady(false);
 
       if (!user) {
         setCloudStatus('idle');
-        const storedPlayer = readStoredPlayer();
-        setCurrentUser(storedPlayer);
+        setCurrentUser(readStoredPlayer());
         return;
       }
 
@@ -139,6 +136,7 @@ export default function App() {
           });
         }
 
+        setIsCloudSaveReady(true);
         setCloudStatus('synced');
       } catch (error) {
         console.error('Cloud profile load failed', error);
@@ -165,7 +163,7 @@ export default function App() {
   }, [currentUser, firebaseUser, savePayload]);
 
   useEffect(() => {
-    if (!firebaseUser || cloudStatus === 'loading') return;
+    if (!firebaseUser || !isCloudSaveReady) return;
 
     setCloudStatus('saving');
     const timer = window.setTimeout(async () => {
@@ -184,7 +182,7 @@ export default function App() {
     }, 5000);
 
     return () => window.clearTimeout(timer);
-  }, [firebaseUser, cloudStatus, savePayload]);
+  }, [firebaseUser, isCloudSaveReady, savePayload]);
 
   useEffect(() => {
     localStorage.setItem('poop_quest_muted', isMuted ? 'true' : 'false');
@@ -261,6 +259,7 @@ export default function App() {
     setFirebaseUser(null);
     setCurrentUser(null);
     setCloudStatus('idle');
+    setIsCloudSaveReady(false);
     localStorage.removeItem(CURRENT_USER_KEY);
     eraseCookie(CURRENT_USER_KEY);
     eraseCookie('poop_quest_guest_mode');
