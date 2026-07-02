@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HelpCircle, LogOut, RotateCcw, Trophy, User } from 'lucide-react';
-import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { HelpCircle, Pencil, RotateCcw, Trophy, User } from 'lucide-react';
 import GameArea from './components/GameArea';
 import { TOILET_CATALOG } from './data';
 import type { Toilet } from './types';
-import { auth, db } from './utils/firebase';
-import { eraseCookie, getCookie, setCookie } from './utils/cookies';
+import { getCookie } from './utils/cookies';
 
 const CURRENT_USER_KEY = 'poop_quest_current_user';
 const GUEST_PROFILE_NAME = 'Guest Player';
 const STARTING_TOILET_ID = 'porta_potty';
-
-type CloudStatus = 'idle' | 'loading' | 'synced' | 'saving' | 'offline';
 
 type SavePayload = {
   coins: number;
@@ -67,9 +62,6 @@ function saveLocalProfile(profile: string, payload: SavePayload) {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() => readStoredPlayer());
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [cloudStatus, setCloudStatus] = useState<CloudStatus>('idle');
-  const [isCloudSaveReady, setIsCloudSaveReady] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const [coins, setCoins] = useState(0);
@@ -80,7 +72,7 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(() => localStorage.getItem('poop_quest_muted') === 'true');
 
   const activeToilet = useMemo(() => {
-    return TOILET_CATALOG.find((toilet) => toilet.id === activeToiletId) || TOILET_CATALOG[0];
+    return TOILET_CATALOG.find((toilet) => toilet.id === activeToiletId) || TOILET_CATALOG.find((toilet) => toilet.id === STARTING_TOILET_ID) || TOILET_CATALOG[0];
   }, [activeToiletId]);
 
   const savePayload = useMemo<SavePayload>(() => ({
@@ -92,97 +84,30 @@ export default function App() {
   }), [coins, unlockedToilets, activeToiletId, poopLevel, highScore]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      setIsCloudSaveReady(false);
-
-      if (!user) {
-        setCloudStatus('idle');
-        setCurrentUser(readStoredPlayer());
-        return;
-      }
-
-      const profileName = user.email || `Cloud Player ${user.uid.slice(0, 6)}`;
-      setCurrentUser(profileName);
-      localStorage.setItem(CURRENT_USER_KEY, profileName);
-      setCookie(CURRENT_USER_KEY, profileName, 30);
-      setCookie('poop_quest_guest_mode', 'false', 30);
-      setCloudStatus('loading');
-
-      try {
-        const userRef = doc(db, 'users', user.uid);
-        const snap = await getDoc(userRef);
-
-        if (snap.exists()) {
-          const data = snap.data();
-          setCoins(readNumber(String(data.coins ?? 0), 0));
-          setUnlockedToilets(Array.isArray(data.unlockedToilets) ? data.unlockedToilets : [STARTING_TOILET_ID]);
-          setActiveToiletId(typeof data.activeToiletId === 'string' ? data.activeToiletId : STARTING_TOILET_ID);
-          setPoopLevel(readNumber(String(data.poopLevel ?? 1), 1));
-          setHighScore(readNumber(String(data.highScore ?? 0), 0));
-        } else {
-          const initialLocalSave = localSaveFor(profileName);
-          setCoins(initialLocalSave.coins);
-          setUnlockedToilets(initialLocalSave.unlockedToilets);
-          setActiveToiletId(initialLocalSave.activeToiletId);
-          setPoopLevel(initialLocalSave.poopLevel);
-          setHighScore(initialLocalSave.highScore);
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email || '',
-            ...initialLocalSave,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        }
-
-        setIsCloudSaveReady(true);
-        setCloudStatus('synced');
-      } catch (error) {
-        console.error('Cloud profile load failed', error);
-        setCloudStatus('offline');
-      }
-    });
-
-    return () => unsubscribe();
+    const refreshUser = () => setCurrentUser(readStoredPlayer());
+    refreshUser();
+    window.addEventListener('storage', refreshUser);
+    window.addEventListener('focus', refreshUser);
+    return () => {
+      window.removeEventListener('storage', refreshUser);
+      window.removeEventListener('focus', refreshUser);
+    };
   }, []);
 
   useEffect(() => {
-    if (!currentUser || firebaseUser) return;
+    if (!currentUser) return;
     const save = localSaveFor(currentUser);
     setCoins(save.coins);
     setUnlockedToilets(save.unlockedToilets);
     setActiveToiletId(save.activeToiletId);
     setPoopLevel(save.poopLevel);
     setHighScore(save.highScore);
-  }, [currentUser, firebaseUser]);
+  }, [currentUser]);
 
   useEffect(() => {
-    if (!currentUser || firebaseUser) return;
+    if (!currentUser) return;
     saveLocalProfile(currentUser, savePayload);
-  }, [currentUser, firebaseUser, savePayload]);
-
-  useEffect(() => {
-    if (!firebaseUser || !isCloudSaveReady) return;
-
-    setCloudStatus('saving');
-    const timer = window.setTimeout(async () => {
-      try {
-        await setDoc(doc(db, 'users', firebaseUser.uid), {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || '',
-          ...savePayload,
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
-        setCloudStatus('synced');
-      } catch (error) {
-        console.error('Cloud profile save failed', error);
-        setCloudStatus('offline');
-      }
-    }, 5000);
-
-    return () => window.clearTimeout(timer);
-  }, [firebaseUser, isCloudSaveReady, savePayload]);
+  }, [currentUser, savePayload]);
 
   useEffect(() => {
     localStorage.setItem('poop_quest_muted', isMuted ? 'true' : 'false');
@@ -230,52 +155,27 @@ export default function App() {
     const confirmed = window.confirm(`Reset all progress for ${currentUser}?`);
     if (!confirmed) return;
 
-    setCoins(0);
-    setUnlockedToilets([STARTING_TOILET_ID]);
-    setActiveToiletId(STARTING_TOILET_ID);
-    setPoopLevel(1);
-    setHighScore(0);
+    const emptySave = {
+      coins: 0,
+      unlockedToilets: [STARTING_TOILET_ID],
+      activeToiletId: STARTING_TOILET_ID,
+      poopLevel: 1,
+      highScore: 0,
+    };
 
-    if (!firebaseUser) {
-      saveLocalProfile(currentUser, {
-        coins: 0,
-        unlockedToilets: [STARTING_TOILET_ID],
-        activeToiletId: STARTING_TOILET_ID,
-        poopLevel: 1,
-        highScore: 0,
-      });
-    }
+    setCoins(emptySave.coins);
+    setUnlockedToilets(emptySave.unlockedToilets);
+    setActiveToiletId(emptySave.activeToiletId);
+    setPoopLevel(emptySave.poopLevel);
+    setHighScore(emptySave.highScore);
+    saveLocalProfile(currentUser, emptySave);
   };
 
-  const handleSignOut = async () => {
-    try {
-      if (firebaseUser) {
-        await signOut(auth);
-      }
-    } catch (error) {
-      console.error('Sign out failed', error);
-    }
-
-    setFirebaseUser(null);
-    setCurrentUser(null);
-    setCloudStatus('idle');
-    setIsCloudSaveReady(false);
-    localStorage.removeItem(CURRENT_USER_KEY);
-    eraseCookie(CURRENT_USER_KEY);
-    eraseCookie('poop_quest_guest_mode');
+  const openUsernameSettings = () => {
+    window.dispatchEvent(new CustomEvent('ptq:open-username-settings'));
   };
 
-  const statusLabel = firebaseUser
-    ? cloudStatus === 'synced'
-      ? 'Cloud synced'
-      : cloudStatus === 'saving'
-        ? 'Cloud saving...'
-        : cloudStatus === 'loading'
-          ? 'Cloud loading...'
-          : 'Cloud offline'
-    : currentUser
-      ? 'Local save'
-      : 'Choose save';
+  const statusLabel = currentUser ? 'Local profile' : 'Create username';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-900">
@@ -288,7 +188,7 @@ export default function App() {
                 Poop Toilet Quest
               </div>
               <div className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                Solo arcade build
+                Solo local arcade build
               </div>
             </div>
           </div>
@@ -305,20 +205,18 @@ export default function App() {
             )}
             <button
               type="button"
+              onClick={openUsernameSettings}
+              className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 font-black uppercase text-slate-300 transition hover:border-cyan-300 hover:text-cyan-200"
+            >
+              <Pencil className="mr-1 inline h-3.5 w-3.5" /> Name
+            </button>
+            <button
+              type="button"
               onClick={() => setIsGuideOpen(true)}
               className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 font-black uppercase text-slate-300 transition hover:border-amber-300 hover:text-amber-200"
             >
               <HelpCircle className="mr-1 inline h-3.5 w-3.5" /> Guide
             </button>
-            {currentUser && (
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 font-black uppercase text-rose-200 transition hover:bg-rose-500/20"
-              >
-                <LogOut className="mr-1 inline h-3.5 w-3.5" /> Out
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -391,8 +289,9 @@ export default function App() {
             <div className="mt-5 grid gap-3 text-sm font-bold leading-relaxed text-slate-300">
               <p>Move with WASD or arrows on PC. On mobile, choose Mobile Play and use the joystick.</p>
               <p>Flush with Space or the mobile Flush button. The blue bar above your character shows when flush is ready.</p>
-              <p>Enemies drop coins. Stronger enemies drop more. Use coins to buy stronger toilets with more damage, range, and faster cooldown.</p>
+              <p>Enemies drop coins and kills. Use coins to buy stronger toilets, and use kills to unlock custom skins.</p>
               <p>The top-right minimap shows enemies, danger, coins, fruit, and when enemies are inside flush range.</p>
+              <p>Your save is local to this device. You can change your username from the Name button, then it has a 24-hour cooldown.</p>
             </div>
           </section>
         </div>
