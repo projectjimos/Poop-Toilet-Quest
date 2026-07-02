@@ -34,7 +34,9 @@ function shouldExpandSlice(target: unknown, start?: number, end?: number) {
   if (!Array.isArray(target)) return false;
   if (start !== 0 || end !== ORIGINAL_SHOP_LIMIT) return false;
   if (target.length <= ORIGINAL_SHOP_LIMIT) return false;
-  return target.slice(0, Math.min(3, target.length)).every(looksLikeToilet);
+
+  const sample = ORIGINAL_SLICE.call(target, 0, Math.min(3, target.length));
+  return sample.every(looksLikeToilet);
 }
 
 function installExpandedToiletShopSlice() {
