@@ -1,25 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { TOILET_CATALOG } from '../data';
-import type { Toilet } from '../types';
+import { useEffect, type ReactNode } from 'react';
 import { getCookie } from '../utils/cookies';
 
 const CURRENT_USER_KEY = 'poop_quest_current_user';
-const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
-const STARTING_TOILET_ID = 'porta_potty';
-const DEFAULT_SKIN_ID = 'default';
-const VISIBLE_SHOP_TOILET_LIMIT = 52;
-const VISIBLE_SHOP_TOILETS = TOILET_CATALOG.slice(0, VISIBLE_SHOP_TOILET_LIMIT);
-
-const SKIN_GOALS = [
-  { id: 'default', name: 'Default', cost: 0 },
-  { id: 'apple', name: 'Apple', cost: 5 },
-  { id: 'banana', name: 'Banana', cost: 10 },
-  { id: 'strawberry', name: 'Strawberry', cost: 15 },
-  { id: 'watermelon', name: 'Watermelon', cost: 20 },
-  { id: 'pineapple', name: 'Pineapple', cost: 30 },
-  { id: 'cherry', name: 'Cherry', cost: 40 },
-  { id: 'grapes', name: 'Grapes', cost: 50 },
-];
 
 const MULTIPLAYER_UI_TEXTS = [
   '🌐 CO-OP Arena',
@@ -47,156 +29,8 @@ const KINETIC_SUIT_UI_TEXTS = [
   'Galactic Cow Suit',
 ];
 
-type GoalState = {
-  profile: string | null;
-  coins: number;
-  unlockedToilets: string[];
-  activeToiletId: string;
-  killCredits: number;
-  unlockedSkins: string[];
-  activeSkinId: string;
-  goalNumber: number;
-};
-
 function getActiveProfile(): string | null {
   return getCookie(CURRENT_USER_KEY) || localStorage.getItem(CURRENT_USER_KEY);
-}
-
-function profileKey(profile: string): string {
-  return profile.trim() || 'Guest Player';
-}
-
-function readNumber(key: string, fallback: number): number {
-  const raw = localStorage.getItem(key);
-  if (raw === null) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
-}
-
-function readString(key: string, fallback: string): string {
-  const raw = localStorage.getItem(key);
-  return raw && raw.trim() ? raw : fallback;
-}
-
-function readStringArray(key: string, fallback: string[]): string[] {
-  const raw = localStorage.getItem(key);
-  if (!raw) return fallback;
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function createGoalOneState(profile: string | null = getActiveProfile()): GoalState {
-  return {
-    profile,
-    coins: 0,
-    unlockedToilets: [STARTING_TOILET_ID],
-    activeToiletId: STARTING_TOILET_ID,
-    killCredits: 0,
-    unlockedSkins: [DEFAULT_SKIN_ID],
-    activeSkinId: DEFAULT_SKIN_ID,
-    goalNumber: 1,
-  };
-}
-
-function readGoalState(): GoalState {
-  const profile = getActiveProfile();
-  if (!profile) return createGoalOneState(null);
-
-  const key = profileKey(profile);
-  const coins = readNumber(`poop_quest_coins_${key}`, 0);
-  const unlockedToilets = readStringArray(`poop_quest_unlocked_${key}`, [STARTING_TOILET_ID]);
-  const killCredits = readNumber(`poop_quest_kill_credits_${key}`, 0);
-  const unlockedSkins = readStringArray(`poop_quest_unlocked_skins_${key}`, [DEFAULT_SKIN_ID]);
-
-  return {
-    profile,
-    coins,
-    unlockedToilets,
-    activeToiletId: readString(`poop_quest_active_id_${key}`, STARTING_TOILET_ID),
-    killCredits,
-    unlockedSkins,
-    activeSkinId: readString(`poop_quest_active_skin_${key}`, DEFAULT_SKIN_ID),
-    goalNumber: calculateGoalNumber(coins, unlockedToilets, killCredits, unlockedSkins),
-  };
-}
-
-function findVisibleShopToiletById(id: string): Toilet | undefined {
-  return VISIBLE_SHOP_TOILETS.find((toilet) => toilet.id === id);
-}
-
-function sortToiletsByLevel(toilets: Toilet[]) {
-  return [...toilets].sort((a, b) => (a.level || 0) - (b.level || 0));
-}
-
-function strongestOwnedVisibleToilet(unlockedToilets: string[]): Toilet {
-  const owned = VISIBLE_SHOP_TOILETS.filter((toilet) => unlockedToilets.includes(toilet.id));
-  const sortedOwned = sortToiletsByLevel(owned);
-  return sortedOwned[sortedOwned.length - 1] || VISIBLE_SHOP_TOILETS[0] || TOILET_CATALOG[0];
-}
-
-function nextLockedVisibleToilet(unlockedToilets: string[]): Toilet | undefined {
-  return sortToiletsByLevel(VISIBLE_SHOP_TOILETS).find((toilet) => !unlockedToilets.includes(toilet.id));
-}
-
-function nextLockedSkin(unlockedSkins: string[]) {
-  return SKIN_GOALS.find((skin) => !unlockedSkins.includes(skin.id));
-}
-
-function calculateGoalNumber(coins: number, unlockedToilets: string[], killCredits: number, unlockedSkins: string[]): number {
-  const nextToilet = nextLockedVisibleToilet(unlockedToilets);
-  const nextSkin = nextLockedSkin(unlockedSkins);
-
-  if (unlockedToilets.length <= 1 && coins === 0 && killCredits === 0) return 1;
-  if (nextToilet && coins < nextToilet.cost) return 1;
-  if (nextToilet && coins >= nextToilet.cost) return 2;
-  if (nextSkin && killCredits < nextSkin.cost) return 3;
-  if (nextSkin && killCredits >= nextSkin.cost) return 4;
-  return 5;
-}
-
-function getNextGoal(state: GoalState): string {
-  const { profile, coins, unlockedToilets, activeToiletId, killCredits, unlockedSkins, activeSkinId } = state;
-
-  if (!profile) return 'Create a local username to start playing.';
-
-  const activeToilet = findVisibleShopToiletById(activeToiletId) || VISIBLE_SHOP_TOILETS[0] || TOILET_CATALOG[0];
-  const strongestToilet = strongestOwnedVisibleToilet(unlockedToilets);
-  const nextToilet = nextLockedVisibleToilet(unlockedToilets);
-  const nextSkin = nextLockedSkin(unlockedSkins);
-  const hasBestVisibleToiletEquipped = strongestToilet.id === activeToilet.id;
-
-  if (!hasBestVisibleToiletEquipped) {
-    return `Open Shop → Toilets and equip ${strongestToilet.emoji} ${strongestToilet.name}. It is your strongest visible toilet.`;
-  }
-
-  if (nextToilet && coins >= nextToilet.cost) {
-    return `Open Shop → Toilets and buy ${nextToilet.emoji} ${nextToilet.name} for ${nextToilet.cost} coins.`;
-  }
-
-  if (nextSkin && killCredits >= nextSkin.cost) {
-    return `Open Shop → Skins and unlock the ${nextSkin.name} skin for ${nextSkin.cost} kills.`;
-  }
-
-  const unlockedNonDefaultSkin = unlockedSkins.find((skinId) => skinId !== DEFAULT_SKIN_ID);
-  if (unlockedNonDefaultSkin && activeSkinId === DEFAULT_SKIN_ID) {
-    const skinName = SKIN_GOALS.find((skin) => skin.id === unlockedNonDefaultSkin)?.name || 'new';
-    return `Open Shop → Skins and equip your ${skinName} skin.`;
-  }
-
-  if (nextToilet) {
-    return `Collect ${Math.max(0, nextToilet.cost - coins)} more coins for ${nextToilet.emoji} ${nextToilet.name}.`;
-  }
-
-  if (nextSkin) {
-    return `Defeat ${Math.max(0, nextSkin.cost - killCredits)} more enemies or boss-credit kills to unlock the ${nextSkin.name} skin.`;
-  }
-
-  return `You own every visible toilet upgrade. Keep surviving, beat boss waves, and chase a higher score with ${activeToilet.emoji} ${activeToilet.name}.`;
 }
 
 function createSafeCloseEvent(): CloseEvent | Event {
@@ -340,11 +174,9 @@ function removeStoredSuitProgress(): void {
 }
 
 export default function GameQualityGuard({ children }: { children: ReactNode }) {
-  const [goalState, setGoalState] = useState<GoalState>(() => readGoalState());
-  const [isGoalDismissed, setIsGoalDismissed] = useState(() => localStorage.getItem(GOAL_DISMISSED_KEY) === 'true');
-
   useEffect(() => {
     localStorage.removeItem('poop_quest_friends');
+    localStorage.removeItem('poop_quest_goal_helper_dismissed');
     removeStoredSuitProgress();
   }, []);
 
@@ -362,66 +194,5 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     };
   }, []);
 
-  useEffect(() => {
-    const syncGoalState = () => setGoalState(readGoalState());
-    const resetGoalHelper = () => {
-      localStorage.removeItem(GOAL_DISMISSED_KEY);
-      setIsGoalDismissed(false);
-      setGoalState(createGoalOneState());
-      window.setTimeout(() => setGoalState(createGoalOneState()), 0);
-    };
-
-    syncGoalState();
-
-    const interval = window.setInterval(syncGoalState, 2000);
-    window.addEventListener('storage', syncGoalState);
-    window.addEventListener('focus', syncGoalState);
-    window.addEventListener('ptq:play-requested', syncGoalState as EventListener);
-    window.addEventListener('ptq:coins-updated', syncGoalState as EventListener);
-    window.addEventListener('ptq:progress-reset', resetGoalHelper as EventListener);
-
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener('storage', syncGoalState);
-      window.removeEventListener('focus', syncGoalState);
-      window.removeEventListener('ptq:play-requested', syncGoalState as EventListener);
-      window.removeEventListener('ptq:coins-updated', syncGoalState as EventListener);
-      window.removeEventListener('ptq:progress-reset', resetGoalHelper as EventListener);
-    };
-  }, []);
-
-  const nextGoal = useMemo(() => getNextGoal(goalState), [goalState]);
-
-  const dismissGoal = () => {
-    localStorage.setItem(GOAL_DISMISSED_KEY, 'true');
-    setIsGoalDismissed(true);
-  };
-
-  return (
-    <>
-      {children}
-
-      {goalState.profile && !isGoalDismissed && (
-        <aside className="pointer-events-none fixed left-4 top-20 z-[55] w-[min(90vw,360px)] rounded-2xl border border-amber-400/30 bg-slate-950/90 p-4 font-mono text-slate-100 shadow-2xl shadow-amber-950/30 backdrop-blur-md">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Goal #{goalState.goalNumber}</div>
-              <p className="mt-1 text-sm font-black leading-snug text-white">{nextGoal}</p>
-              <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                Coins {goalState.coins} · Kills {goalState.killCredits}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={dismissGoal}
-              className="pointer-events-auto rounded-full border border-slate-700 px-2 py-1 text-[10px] font-black uppercase text-slate-400 transition hover:border-amber-300 hover:text-amber-200"
-              aria-label="Hide next goal helper"
-            >
-              Hide
-            </button>
-          </div>
-        </aside>
-      )}
-    </>
-  );
+  return <>{children}</>;
 }
