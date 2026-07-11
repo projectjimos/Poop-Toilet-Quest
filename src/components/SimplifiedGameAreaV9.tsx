@@ -27,16 +27,16 @@ function tuneBossDifficulty(enemy: MaybeBoss) {
 
   // Bosses should feel heavy, not fast. Later waves get only tiny speed bumps.
   if (typeof enemy.speed === 'number') {
-    enemy.speed = clamp(Math.round(36 + bossTier * 3), 38, 70);
+    enemy.speed = clamp(Math.round(34 + bossTier * 2), 34, 56);
   }
 
-  // Difficulty scales through tankiness and physical threat instead of chase speed.
-  const hpBonus = Math.round(bossTier * 85 + Math.max(0, bossTier - 1) ** 2 * 22);
+  // Keep bosses beatable now that they summon troops; scaling should be lighter.
+  const hpBonus = Math.round(bossTier * 30 + Math.max(0, bossTier - 1) ** 2 * 6);
   if (typeof enemy.maxHp === 'number') enemy.maxHp += hpBonus;
   if (typeof enemy.hp === 'number') enemy.hp += hpBonus;
 
   if (typeof enemy.size === 'number') {
-    enemy.size = clamp(Math.round(enemy.size + bossTier * 2.5), enemy.size, 92);
+    enemy.size = clamp(Math.round(enemy.size + bossTier * 1.5), enemy.size, 82);
   }
 
   if (typeof enemy.scoreValue === 'number') {
