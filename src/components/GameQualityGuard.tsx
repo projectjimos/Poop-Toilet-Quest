@@ -343,6 +343,12 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
 
   useEffect(() => {
     const syncGoalState = () => setGoalState(readGoalState());
+    const resetGoalHelper = () => {
+      localStorage.removeItem(GOAL_DISMISSED_KEY);
+      setIsGoalDismissed(false);
+      syncGoalState();
+    };
+
     syncGoalState();
 
     const interval = window.setInterval(syncGoalState, 2000);
@@ -350,6 +356,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     window.addEventListener('focus', syncGoalState);
     window.addEventListener('ptq:play-requested', syncGoalState as EventListener);
     window.addEventListener('ptq:coins-updated', syncGoalState as EventListener);
+    window.addEventListener('ptq:progress-reset', resetGoalHelper as EventListener);
 
     return () => {
       window.clearInterval(interval);
@@ -357,6 +364,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
       window.removeEventListener('focus', syncGoalState);
       window.removeEventListener('ptq:play-requested', syncGoalState as EventListener);
       window.removeEventListener('ptq:coins-updated', syncGoalState as EventListener);
+      window.removeEventListener('ptq:progress-reset', resetGoalHelper as EventListener);
     };
   }, []);
 
