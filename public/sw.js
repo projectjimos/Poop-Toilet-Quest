@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'poop-toilet-quest-offline-v1';
+const CACHE_VERSION = 'poop-toilet-quest-offline-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
