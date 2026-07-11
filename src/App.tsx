@@ -8,6 +8,7 @@ import { getCookie } from './utils/cookies';
 const CURRENT_USER_KEY = 'poop_quest_current_user';
 const GUEST_PROFILE_NAME = 'Guest Player';
 const STARTING_TOILET_ID = 'porta_potty';
+const DEFAULT_SKIN_ID = 'default';
 
 type SavePayload = {
   coins: number;
@@ -60,9 +61,17 @@ function saveLocalProfile(profile: string, payload: SavePayload) {
   localStorage.setItem(`poop_quest_highscore_${key}`, payload.highScore.toString());
 }
 
+function resetLocalSkinProfile(profile: string) {
+  const key = profileKey(profile);
+  localStorage.setItem(`poop_quest_kill_credits_${key}`, '0');
+  localStorage.setItem(`poop_quest_unlocked_skins_${key}`, JSON.stringify([DEFAULT_SKIN_ID]));
+  localStorage.setItem(`poop_quest_active_skin_${key}`, DEFAULT_SKIN_ID);
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() => readStoredPlayer());
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [gameInstanceKey, setGameInstanceKey] = useState(0);
 
   const [coins, setCoins] = useState(0);
   const [unlockedToilets, setUnlockedToilets] = useState<string[]>([STARTING_TOILET_ID]);
@@ -152,7 +161,7 @@ export default function App() {
 
   const resetProgress = () => {
     if (!currentUser) return;
-    const confirmed = window.confirm(`Reset all progress for ${currentUser}?`);
+    const confirmed = window.confirm(`Reset all progress, skins, and kill credits for ${currentUser}?`);
     if (!confirmed) return;
 
     const emptySave = {
@@ -169,6 +178,8 @@ export default function App() {
     setPoopLevel(emptySave.poopLevel);
     setHighScore(emptySave.highScore);
     saveLocalProfile(currentUser, emptySave);
+    resetLocalSkinProfile(currentUser);
+    setGameInstanceKey((key) => key + 1);
   };
 
   const openUsernameSettings = () => {
@@ -246,11 +257,12 @@ export default function App() {
             className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left transition hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Reset</div>
-            <div className="mt-2 text-sm font-black uppercase text-rose-200"><RotateCcw className="mr-1 inline h-4 w-4" /> Progress</div>
+            <div className="mt-2 text-sm font-black uppercase text-rose-200"><RotateCcw className="mr-1 inline h-4 w-4" /> Progress + Skins</div>
           </button>
         </section>
 
         <GameArea
+          key={gameInstanceKey}
           coins={coins}
           addCoins={addCoins}
           unlockedToilets={unlockedToilets}
@@ -291,7 +303,8 @@ export default function App() {
               <p>Flush with Space or the mobile Flush button. The blue bar above your character shows when flush is ready.</p>
               <p>Enemies drop coins and kills. Use coins to buy stronger toilets, and use kills to unlock custom skins.</p>
               <p>The top-right minimap shows enemies, danger, coins, fruit, and when enemies are inside flush range.</p>
-              <p>Your save is local to this device. You can change your username from the Name button, then it has a 24-hour cooldown.</p>
+              <p>Your save is local to this device. Reset Progress also resets skins and kill credits.</p>
+              <p>You can change your username from the Name button, then it has a 24-hour cooldown.</p>
             </div>
           </section>
         </div>
