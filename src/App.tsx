@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HelpCircle, Pencil, RotateCcw, Trophy, User } from 'lucide-react';
 import GameArea from './components/GameArea';
-import GameSoundtrack from './components/GameSoundtrack';
 import { TOILET_CATALOG } from './data';
 import type { Toilet } from './types';
 import { getCookie } from './utils/cookies';
@@ -250,8 +249,6 @@ export default function App() {
             <div className="mt-2 text-sm font-black uppercase text-rose-200"><RotateCcw className="mr-1 inline h-4 w-4" /> Progress</div>
           </button>
         </section>
-
-        <GameSoundtrack />
 
         <GameArea
           coins={coins}
