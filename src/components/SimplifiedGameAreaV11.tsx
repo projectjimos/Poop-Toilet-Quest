@@ -1,4 +1,5 @@
-import { useEffect, useMemo, type ComponentProps } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { TOILET_CATALOG } from '../data';
 import SimplifiedGameAreaV10 from './SimplifiedGameAreaV10';
 import type { Toilet } from '../types';
 
@@ -44,6 +45,25 @@ type RuntimeLike = {
   coins?: CoinLike[];
 };
 
+type ChestBand = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'secret';
+
+type ChestTier = {
+  id: string;
+  name: string;
+  emoji: string;
+  cost: number;
+  accent: string;
+  description: string;
+  odds: Array<{ band: ChestBand; weight: number; label: string }>;
+};
+
+type ChestResult = {
+  title: string;
+  detail: string;
+  band: ChestBand;
+  emoji: string;
+};
+
 const WORLD_SIZE = 1500;
 const BASE_PLAYER_SPEED = 250;
 const MAX_PLAYER_SPEED = 430;
@@ -52,6 +72,79 @@ const DEFAULT_BOSS_SUMMON_INTERVAL_MS = 5000;
 const FASTEST_BOSS_SUMMON_INTERVAL_MS = 900;
 const NORMAL_COIN_DESPAWN_MS = 22000;
 const BIG_COIN_DESPAWN_MS = 32000;
+const VISIBLE_SHOP_TOILET_LIMIT = 52;
+
+const CHESTS: ChestTier[] = [
+  {
+    id: 'wooden',
+    name: 'Wooden Chest',
+    emoji: '🪵',
+    cost: 100,
+    accent: 'amber',
+    description: 'Cheap roll. Mostly weak toilets worth less than the chest, with a tiny secret chance.',
+    odds: [
+      { band: 'common', weight: 8300, label: '83% common toilet' },
+      { band: 'uncommon', weight: 1300, label: '13% uncommon toilet' },
+      { band: 'rare', weight: 390, label: '3.9% rare toilet' },
+      { band: 'secret', weight: 10, label: '0.1% secret toilet' },
+    ],
+  },
+  {
+    id: 'iron',
+    name: 'Iron Chest',
+    emoji: '🧰',
+    cost: 350,
+    accent: 'slate',
+    description: 'Better early-game rolls with a small secret chance.',
+    odds: [
+      { band: 'common', weight: 5200, label: '52% common toilet' },
+      { band: 'uncommon', weight: 3300, label: '33% uncommon toilet' },
+      { band: 'rare', weight: 1450, label: '14.5% rare toilet' },
+      { band: 'secret', weight: 50, label: '0.5% secret toilet' },
+    ],
+  },
+  {
+    id: 'gold',
+    name: 'Gold Chest',
+    emoji: '🏆',
+    cost: 900,
+    accent: 'yellow',
+    description: 'Mid-game chest. Less junk, more rare and epic toilets.',
+    odds: [
+      { band: 'uncommon', weight: 4500, label: '45% uncommon toilet' },
+      { band: 'rare', weight: 3300, label: '33% rare toilet' },
+      { band: 'epic', weight: 2100, label: '21% epic toilet' },
+      { band: 'secret', weight: 100, label: '1% secret toilet' },
+    ],
+  },
+  {
+    id: 'diamond',
+    name: 'Diamond Chest',
+    emoji: '💎',
+    cost: 2500,
+    accent: 'cyan',
+    description: 'High-tier chest with much better odds for powerful hidden rewards.',
+    odds: [
+      { band: 'rare', weight: 3800, label: '38% rare toilet' },
+      { band: 'epic', weight: 3500, label: '35% epic toilet' },
+      { band: 'legendary', weight: 2500, label: '25% legendary toilet' },
+      { band: 'secret', weight: 200, label: '2% secret toilet' },
+    ],
+  },
+  {
+    id: 'galaxy',
+    name: 'Galaxy Chest',
+    emoji: '🌌',
+    cost: 7500,
+    accent: 'violet',
+    description: 'Endgame chest. Expensive, but mostly high-rarity toilets and the best secret odds.',
+    odds: [
+      { band: 'epic', weight: 3700, label: '37% epic toilet' },
+      { band: 'legendary', weight: 4500, label: '45% legendary toilet' },
+      { band: 'secret', weight: 1800, label: '18% secret toilet' },
+    ],
+  },
+];
 
 const SUMMON_TROOPS = [
   { emoji: '🦠', name: 'Boss Germ Troop', hp: 18, speed: 76, size: 25, scoreValue: 1, coinDrop: 1 },
@@ -95,6 +188,56 @@ function slowBossSpeed(tier: number) {
 
 function coinLifetimeMs(coin: CoinLike) {
   return typeof coin.value === 'number' && coin.value > 1 ? BIG_COIN_DESPAWN_MS : NORMAL_COIN_DESPAWN_MS;
+}
+
+function toiletsForBand(band: ChestBand): Toilet[] {
+  const visibleToilets = TOILET_CATALOG.slice(1, VISIBLE_SHOP_TOILET_LIMIT);
+  const secretToilets = TOILET_CATALOG.slice(VISIBLE_SHOP_TOILET_LIMIT);
+
+  if (band === 'common') return visibleToilets.filter((toilet) => toilet.level <= 10);
+  if (band === 'uncommon') return visibleToilets.filter((toilet) => toilet.level > 10 && toilet.level <= 25);
+  if (band === 'rare') return visibleToilets.filter((toilet) => toilet.level > 25 && toilet.level <= 40);
+  if (band === 'epic') return visibleToilets.filter((toilet) => toilet.level > 40 && toilet.level <= 52);
+  if (band === 'legendary') return secretToilets.filter((toilet) => toilet.level > 52 && toilet.level <= 80);
+  return secretToilets.filter((toilet) => toilet.level > 80);
+}
+
+function pickBand(chest: ChestTier): ChestBand {
+  const totalWeight = chest.odds.reduce((sum, option) => sum + option.weight, 0);
+  let roll = Math.random() * totalWeight;
+
+  for (const option of chest.odds) {
+    roll -= option.weight;
+    if (roll <= 0) return option.band;
+  }
+
+  return chest.odds[chest.odds.length - 1].band;
+}
+
+function pickToiletFromBand(band: ChestBand): Toilet {
+  const pool = toiletsForBand(band);
+  const fallbackPool = TOILET_CATALOG.slice(1, VISIBLE_SHOP_TOILET_LIMIT);
+  const finalPool = pool.length > 0 ? pool : fallbackPool;
+  return finalPool[Math.floor(Math.random() * finalPool.length)] || TOILET_CATALOG[1] || TOILET_CATALOG[0];
+}
+
+function duplicateRefund(toilet: Toilet, chest: ChestTier) {
+  const toiletValue = Math.max(10, toilet.cost);
+  return Math.max(10, Math.floor(Math.min(chest.cost * 0.65, toiletValue * 0.5 + chest.cost * 0.08)));
+}
+
+function bandLabel(band: ChestBand) {
+  if (band === 'secret') return 'SECRET';
+  return band.toUpperCase();
+}
+
+function bandTextClass(band: ChestBand) {
+  if (band === 'secret') return 'text-violet-200';
+  if (band === 'legendary') return 'text-amber-200';
+  if (band === 'epic') return 'text-fuchsia-200';
+  if (band === 'rare') return 'text-cyan-200';
+  if (band === 'uncommon') return 'text-emerald-200';
+  return 'text-slate-200';
 }
 
 function makeSummonedTroop(boss: EnemyLike, tier: number): EnemyLike {
@@ -227,6 +370,8 @@ function tuneRuntime(playerSpeed: number) {
 }
 
 export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
+  const [chestResult, setChestResult] = useState<ChestResult | null>(null);
+
   const playerSpeed = useMemo(() => speedForToilet(props.activeToilet), [
     props.activeToilet.id,
     props.activeToilet.level,
@@ -235,6 +380,45 @@ export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
   ]);
 
   const speedBonus = playerSpeed - BASE_PLAYER_SPEED;
+
+  const openChest = (chest: ChestTier) => {
+    if (props.coins < chest.cost) {
+      setChestResult({
+        title: `${chest.name} needs more coins`,
+        detail: `You need ${chest.cost - props.coins} more coins to open this chest.`,
+        band: 'common',
+        emoji: chest.emoji,
+      });
+      return;
+    }
+
+    props.addCoins(-chest.cost);
+
+    const band = pickBand(chest);
+    const reward = pickToiletFromBand(band);
+    const alreadyOwned = props.unlockedToilets.includes(reward.id);
+
+    if (alreadyOwned) {
+      const refund = duplicateRefund(reward, chest);
+      props.addCoins(refund);
+      setChestResult({
+        title: `${chest.emoji} Duplicate ${reward.emoji} ${reward.name}`,
+        detail: `You already owned it, so you got ${refund} coins back. ${bandLabel(band)} roll.`,
+        band,
+        emoji: reward.emoji,
+      });
+      return;
+    }
+
+    props.setUnlockedToilets((previous) => previous.includes(reward.id) ? previous : [...previous, reward.id]);
+    props.setActiveToiletId(reward.id);
+    setChestResult({
+      title: `${chest.emoji} Won ${reward.emoji} ${reward.name}`,
+      detail: `${bandLabel(band)} roll · Level ${reward.level} · DMG ${reward.damage}. It was unlocked and equipped automatically.`,
+      band,
+      emoji: reward.emoji,
+    });
+  };
 
   useEffect(() => {
     const tuneGameplay = () => tuneRuntime(playerSpeed);
@@ -257,6 +441,56 @@ export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
         Equipped toilet speed: {playerSpeed} movement speed
         {speedBonus > 0 ? ` · +${speedBonus} from ${props.activeToilet.name}` : ' · starter speed'}
       </div>
+
+      <section className="rounded-2xl border border-amber-400/25 bg-slate-950/90 p-4 font-mono text-slate-100 shadow-xl shadow-amber-950/20">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300">Coin Chest Shop</div>
+            <h3 className="mt-1 text-lg font-black uppercase text-white">Open chests for random toilets</h3>
+            <p className="mt-1 max-w-3xl text-xs font-bold leading-relaxed text-slate-400">
+              Uses game coins only. Common rolls are usually weaker than the chest cost, but better chests have better odds for strong hidden toilets that are not sold in the normal shop.
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-black text-amber-200">🪙 {props.coins} coins</div>
+        </div>
+
+        {chestResult && (
+          <div className={`mt-3 rounded-2xl border border-slate-700 bg-slate-900 p-3 text-xs font-black ${bandTextClass(chestResult.band)}`}>
+            <div>{chestResult.title}</div>
+            <div className="mt-1 text-[11px] font-bold text-slate-300">{chestResult.detail}</div>
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {CHESTS.map((chest) => {
+            const affordable = props.coins >= chest.cost;
+            return (
+              <article key={chest.id} className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-3xl">{chest.emoji}</div>
+                    <div className="mt-2 text-xs font-black uppercase text-white">{chest.name}</div>
+                    <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-amber-300">{chest.cost} coins</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openChest(chest)}
+                    disabled={!affordable}
+                    className={`rounded-xl px-3 py-2 text-[10px] font-black uppercase transition ${affordable ? 'bg-amber-400 text-slate-950 hover:bg-amber-300' : 'cursor-not-allowed bg-slate-800 text-slate-500'}`}
+                  >
+                    Open
+                  </button>
+                </div>
+                <p className="mt-3 text-[11px] font-bold leading-snug text-slate-400">{chest.description}</p>
+                <div className="mt-3 space-y-1 border-t border-slate-800 pt-3 text-[10px] font-bold text-slate-500">
+                  {chest.odds.map((option) => <div key={`${chest.id}-${option.band}`}>{option.label}</div>)}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       <SimplifiedGameAreaV10 {...props} />
     </div>
   );
