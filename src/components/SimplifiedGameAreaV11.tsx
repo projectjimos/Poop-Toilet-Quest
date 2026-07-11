@@ -64,15 +64,99 @@ type ChestResult = {
   emoji: string;
 };
 
+type SkinPerk = {
+  id: string;
+  emoji: string;
+  name: string;
+  short: string;
+  detail: string;
+  speedBonus?: number;
+  damageMultiplier?: number;
+  cooldownMultiplier?: number;
+  radiusBonus?: number;
+};
+
 const WORLD_SIZE = 1500;
 const BASE_PLAYER_SPEED = 250;
-const MAX_PLAYER_SPEED = 430;
+const MAX_PLAYER_SPEED = 470;
 const GAMEPLAY_TUNE_INTERVAL_MS = 250;
+const SKIN_SYNC_INTERVAL_MS = 300;
 const DEFAULT_BOSS_SUMMON_INTERVAL_MS = 5000;
 const FASTEST_BOSS_SUMMON_INTERVAL_MS = 900;
 const NORMAL_COIN_DESPAWN_MS = 22000;
 const BIG_COIN_DESPAWN_MS = 32000;
 const VISIBLE_SHOP_TOILET_LIMIT = 52;
+
+const SKIN_PERKS: Record<string, SkinPerk> = {
+  default: {
+    id: 'default',
+    emoji: '💩',
+    name: 'Default Skin',
+    short: 'No perk',
+    detail: 'Classic mode with no passive bonus.',
+  },
+  apple: {
+    id: 'apple',
+    emoji: '🍎',
+    name: 'Apple Skin',
+    short: '+45 speed',
+    detail: 'Crisp apple energy gives +45 movement speed.',
+    speedBonus: 45,
+  },
+  banana: {
+    id: 'banana',
+    emoji: '🍌',
+    name: 'Banana Skin',
+    short: '+18% damage',
+    detail: 'Banana power makes every flush hit 18% harder.',
+    damageMultiplier: 1.18,
+  },
+  strawberry: {
+    id: 'strawberry',
+    emoji: '🍓',
+    name: 'Strawberry Skin',
+    short: '12% faster cooldown',
+    detail: 'Tiny strawberry reflexes reduce flush cooldown by 12%.',
+    cooldownMultiplier: 0.88,
+  },
+  watermelon: {
+    id: 'watermelon',
+    emoji: '🍉',
+    name: 'Watermelon Skin',
+    short: '+75 radius',
+    detail: 'Big watermelon splash adds +75 flush radius.',
+    radiusBonus: 75,
+  },
+  pineapple: {
+    id: 'pineapple',
+    emoji: '🍍',
+    name: 'Pineapple Skin',
+    short: '+10% damage, +35 radius',
+    detail: 'Spiky pineapple pressure adds +10% damage and +35 radius.',
+    damageMultiplier: 1.1,
+    radiusBonus: 35,
+  },
+  cherry: {
+    id: 'cherry',
+    emoji: '🍒',
+    name: 'Cherry Skin',
+    short: '+25 speed, +8% damage',
+    detail: 'Double cherry combo gives +25 speed and +8% damage.',
+    speedBonus: 25,
+    damageMultiplier: 1.08,
+  },
+  grapes: {
+    id: 'grapes',
+    emoji: '🍇',
+    name: 'Grapes Skin',
+    short: 'All-around boost',
+    detail: 'Ultimate fruit flex: +15 speed, +6% damage, +25 radius, and 6% faster cooldown.',
+    speedBonus: 15,
+    damageMultiplier: 1.06,
+    cooldownMultiplier: 0.94,
+    radiusBonus: 25,
+  },
+};
 
 const CHESTS: ChestTier[] = [
   {
@@ -156,13 +240,47 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function speedForToilet(toilet: Toilet) {
+function profileKey(profile: string | null) {
+  return (profile || 'Guest Player').trim() || 'Guest Player';
+}
+
+function storageKey(profile: string | null, key: string) {
+  return `poop_quest_${key}_${profileKey(profile)}`;
+}
+
+function readActiveSkinId(profile: string | null) {
+  const stored = localStorage.getItem(storageKey(profile, 'active_skin')) || 'default';
+  return SKIN_PERKS[stored] ? stored : 'default';
+}
+
+function perkForSkin(id: string) {
+  return SKIN_PERKS[id] || SKIN_PERKS.default;
+}
+
+function speedForToilet(toilet: Toilet, skinPerk: SkinPerk) {
   const levelScore = Math.max(1, toilet.level || 1);
   const costScore = Math.floor(Math.sqrt(Math.max(0, toilet.cost)) / 3);
   const damageScore = Math.floor(Math.max(0, toilet.damage) / 28);
   const powerScore = Math.max(levelScore, costScore, damageScore);
-  const speedBonus = clamp(Math.floor((powerScore - 1) * 4.5), 0, MAX_PLAYER_SPEED - BASE_PLAYER_SPEED);
-  return BASE_PLAYER_SPEED + speedBonus;
+  const toiletSpeedBonus = clamp(Math.floor((powerScore - 1) * 4.5), 0, MAX_PLAYER_SPEED - BASE_PLAYER_SPEED);
+  const skinSpeedBonus = skinPerk.speedBonus || 0;
+  return clamp(BASE_PLAYER_SPEED + toiletSpeedBonus + skinSpeedBonus, BASE_PLAYER_SPEED, MAX_PLAYER_SPEED);
+}
+
+function applySkinPerkToToilet(toilet: Toilet, skinPerk: SkinPerk): Toilet {
+  const damageMultiplier = skinPerk.damageMultiplier || 1;
+  const cooldownMultiplier = skinPerk.cooldownMultiplier || 1;
+  const radiusBonus = skinPerk.radiusBonus || 0;
+
+  if (damageMultiplier === 1 && cooldownMultiplier === 1 && radiusBonus === 0) return toilet;
+
+  return {
+    ...toilet,
+    damage: Math.max(1, Math.round(toilet.damage * damageMultiplier)),
+    cooldownMs: Math.max(450, Math.round(toilet.cooldownMs * cooldownMultiplier)),
+    flushRadius: Math.round(toilet.flushRadius + radiusBonus),
+    perk: `${toilet.perk} Skin perk: ${skinPerk.short}.`,
+  };
 }
 
 function id(prefix: string) {
@@ -371,15 +489,31 @@ function tuneRuntime(playerSpeed: number) {
 
 export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
   const [chestResult, setChestResult] = useState<ChestResult | null>(null);
+  const [activeSkinId, setActiveSkinId] = useState(() => readActiveSkinId(props.currentUser));
 
-  const playerSpeed = useMemo(() => speedForToilet(props.activeToilet), [
+  const activeSkinPerk = perkForSkin(activeSkinId);
+
+  const boostedToilet = useMemo(() => applySkinPerkToToilet(props.activeToilet, activeSkinPerk), [
+    props.activeToilet.id,
+    props.activeToilet.name,
+    props.activeToilet.cost,
+    props.activeToilet.cooldownMs,
+    props.activeToilet.damage,
+    props.activeToilet.flushRadius,
+    props.activeToilet.level,
+    props.activeToilet.perk,
+    activeSkinPerk.id,
+  ]);
+
+  const playerSpeed = useMemo(() => speedForToilet(props.activeToilet, activeSkinPerk), [
     props.activeToilet.id,
     props.activeToilet.level,
     props.activeToilet.cost,
     props.activeToilet.damage,
+    activeSkinPerk.id,
   ]);
 
-  const speedBonus = playerSpeed - BASE_PLAYER_SPEED;
+  const speedBonus = playerSpeed - speedForToilet(props.activeToilet, SKIN_PERKS.default);
 
   const openChest = (chest: ChestTier) => {
     if (props.coins < chest.cost) {
@@ -421,6 +555,21 @@ export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
   };
 
   useEffect(() => {
+    const syncActiveSkin = () => setActiveSkinId(readActiveSkinId(props.currentUser));
+
+    syncActiveSkin();
+    const intervalId = window.setInterval(syncActiveSkin, SKIN_SYNC_INTERVAL_MS);
+    window.addEventListener('storage', syncActiveSkin);
+    window.addEventListener('ptq:play-requested', syncActiveSkin);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('storage', syncActiveSkin);
+      window.removeEventListener('ptq:play-requested', syncActiveSkin);
+    };
+  }, [props.currentUser]);
+
+  useEffect(() => {
     const tuneGameplay = () => tuneRuntime(playerSpeed);
 
     tuneGameplay();
@@ -437,9 +586,15 @@ export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
 
   return (
     <div className="grid gap-3">
-      <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 font-mono text-xs font-bold text-cyan-100">
-        Equipped toilet speed: {playerSpeed} movement speed
-        {speedBonus > 0 ? ` · +${speedBonus} from ${props.activeToilet.name}` : ' · starter speed'}
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.55fr)]">
+        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 font-mono text-xs font-bold text-cyan-100">
+          Equipped toilet speed: {playerSpeed} movement speed
+          {speedBonus > 0 ? ` · +${speedBonus} from ${activeSkinPerk.name}` : ' · no skin speed boost'}
+        </div>
+        <div className="rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-4 py-3 font-mono text-xs font-bold text-fuchsia-100">
+          {activeSkinPerk.emoji} Active skin perk: {activeSkinPerk.short}
+          <div className="mt-1 text-[11px] text-fuchsia-200/80">{activeSkinPerk.detail}</div>
+        </div>
       </div>
 
       <section className="rounded-2xl border border-amber-400/25 bg-slate-950/90 p-4 font-mono text-slate-100 shadow-xl shadow-amber-950/20">
@@ -491,7 +646,7 @@ export default function SimplifiedGameAreaV11(props: GameAreaV10Props) {
         </div>
       </section>
 
-      <SimplifiedGameAreaV10 {...props} />
+      <SimplifiedGameAreaV10 {...props} activeToilet={boostedToilet} />
     </div>
   );
 }
