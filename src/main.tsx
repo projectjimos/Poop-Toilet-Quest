@@ -15,6 +15,14 @@ consentExpiry.setFullYear(consentExpiry.getFullYear() + 1);
 document.cookie = `poop_quest_cookie_consent=true; expires=${consentExpiry.toUTCString()}; path=/; SameSite=None; Secure`;
 localStorage.setItem('poop_quest_fast_arcade_mode', 'true');
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.warn('Offline service worker registration failed', error);
+    });
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppSafetyBoundary>
