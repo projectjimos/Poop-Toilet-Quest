@@ -7,6 +7,8 @@ const CURRENT_USER_KEY = 'poop_quest_current_user';
 const GOAL_DISMISSED_KEY = 'poop_quest_goal_helper_dismissed';
 const STARTING_TOILET_ID = 'porta_potty';
 const DEFAULT_SKIN_ID = 'default';
+const VISIBLE_SHOP_TOILET_LIMIT = 52;
+const VISIBLE_SHOP_TOILETS = TOILET_CATALOG.slice(0, VISIBLE_SHOP_TOILET_LIMIT);
 
 const SKIN_GOALS = [
   { id: 'default', name: 'Default', cost: 0 },
@@ -114,21 +116,22 @@ function readGoalState(): GoalState {
   };
 }
 
-function findToiletById(id: string): Toilet | undefined {
-  return TOILET_CATALOG.find((toilet) => toilet.id === id);
+function findVisibleShopToiletById(id: string): Toilet | undefined {
+  return VISIBLE_SHOP_TOILETS.find((toilet) => toilet.id === id);
 }
 
 function sortToiletsByLevel(toilets: Toilet[]) {
   return [...toilets].sort((a, b) => (a.level || 0) - (b.level || 0));
 }
 
-function strongestOwnedToilet(unlockedToilets: string[]): Toilet {
-  const owned = unlockedToilets.map(findToiletById).filter((toilet): toilet is Toilet => Boolean(toilet));
-  return sortToiletsByLevel(owned).at(-1) || TOILET_CATALOG[0];
+function strongestOwnedVisibleToilet(unlockedToilets: string[]): Toilet {
+  const owned = VISIBLE_SHOP_TOILETS.filter((toilet) => unlockedToilets.includes(toilet.id));
+  const sortedOwned = sortToiletsByLevel(owned);
+  return sortedOwned[sortedOwned.length - 1] || VISIBLE_SHOP_TOILETS[0] || TOILET_CATALOG[0];
 }
 
-function nextLockedToilet(unlockedToilets: string[]): Toilet | undefined {
-  return sortToiletsByLevel(TOILET_CATALOG).find((toilet) => !unlockedToilets.includes(toilet.id));
+function nextLockedVisibleToilet(unlockedToilets: string[]): Toilet | undefined {
+  return sortToiletsByLevel(VISIBLE_SHOP_TOILETS).find((toilet) => !unlockedToilets.includes(toilet.id));
 }
 
 function nextLockedSkin(unlockedSkins: string[]) {
@@ -140,14 +143,14 @@ function getNextGoal(state: GoalState): string {
 
   if (!profile) return 'Create a local username to start playing.';
 
-  const activeToilet = findToiletById(activeToiletId) || TOILET_CATALOG[0];
-  const strongestToilet = strongestOwnedToilet(unlockedToilets);
-  const nextToilet = nextLockedToilet(unlockedToilets);
+  const activeToilet = findVisibleShopToiletById(activeToiletId) || VISIBLE_SHOP_TOILETS[0] || TOILET_CATALOG[0];
+  const strongestToilet = strongestOwnedVisibleToilet(unlockedToilets);
+  const nextToilet = nextLockedVisibleToilet(unlockedToilets);
   const nextSkin = nextLockedSkin(unlockedSkins);
-  const hasBetterToiletEquipped = strongestToilet.id === activeToilet.id;
+  const hasBestVisibleToiletEquipped = strongestToilet.id === activeToilet.id;
 
-  if (!hasBetterToiletEquipped) {
-    return `Open Shop → Toilets and equip ${strongestToilet.emoji} ${strongestToilet.name}. It is stronger than your current toilet.`;
+  if (!hasBestVisibleToiletEquipped) {
+    return `Open Shop → Toilets and equip ${strongestToilet.emoji} ${strongestToilet.name}. It is your strongest visible toilet.`;
   }
 
   if (nextToilet && coins >= nextToilet.cost) {
@@ -172,7 +175,7 @@ function getNextGoal(state: GoalState): string {
     return `Defeat ${Math.max(0, nextSkin.cost - killCredits)} more enemies or boss-credit kills to unlock the ${nextSkin.name} skin.`;
   }
 
-  return `You own every visible upgrade. Keep surviving, beat boss waves, and chase a higher score with ${activeToilet.emoji} ${activeToilet.name}.`;
+  return `You own every visible toilet upgrade. Keep surviving, beat boss waves, and chase a higher score with ${activeToilet.emoji} ${activeToilet.name}.`;
 }
 
 function createSafeCloseEvent(): CloseEvent | Event {
