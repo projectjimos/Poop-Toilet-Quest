@@ -26,6 +26,17 @@ const NORMAL_ENEMY_SPEED_CAPS: Record<string, number> = {
   'Boss Paper Troop': 76,
 };
 
+const NORMAL_ENEMY_HP_CAPS: Record<string, number> = {
+  'Tiny Germ': 16,
+  'Fast Fly': 14,
+  'Soap Guard': 30,
+  'Paper Tank': 42,
+  'Brush Brute': 64,
+  'Boss Germ Troop': 22,
+  'Boss Fly Troop': 20,
+  'Boss Paper Troop': 36,
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -45,6 +56,16 @@ function tuneNormalEnemySpeed(enemy: MaybeEnemy) {
   } else {
     enemy.speed = Math.min(enemy.speed, 118);
   }
+}
+
+function tuneNormalEnemyHealth(enemy: MaybeEnemy) {
+  if (!enemy || enemy.isBoss === true) return;
+
+  const hpCap = typeof enemy.name === 'string' ? NORMAL_ENEMY_HP_CAPS[enemy.name] : undefined;
+  if (typeof hpCap !== 'number') return;
+
+  if (typeof enemy.maxHp === 'number') enemy.maxHp = Math.min(enemy.maxHp, hpCap);
+  if (typeof enemy.hp === 'number') enemy.hp = Math.min(enemy.hp, hpCap);
 }
 
 function tuneBossDifficulty(enemy: MaybeEnemy) {
@@ -81,6 +102,7 @@ function tuneEnemy(item: unknown) {
 
   const enemy = item as MaybeEnemy;
   tuneNormalEnemySpeed(enemy);
+  tuneNormalEnemyHealth(enemy);
   tuneBossDifficulty(enemy);
 }
 
