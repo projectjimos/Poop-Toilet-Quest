@@ -3,7 +3,7 @@ import SimplifiedGameAreaV8 from './SimplifiedGameAreaV8';
 
 type GameAreaV8Props = ComponentProps<typeof SimplifiedGameAreaV8>;
 
-type MaybeBoss = {
+type MaybeEnemy = {
   isBoss?: boolean;
   bossWave?: number;
   speed?: number;
@@ -13,6 +13,17 @@ type MaybeBoss = {
   scoreValue?: number;
   coinDrop?: number;
   name?: string;
+};
+
+const NORMAL_ENEMY_SPEED_CAPS: Record<string, number> = {
+  'Tiny Germ': 86,
+  'Fast Fly': 124,
+  'Soap Guard': 72,
+  'Paper Tank': 60,
+  'Brush Brute': 86,
+  'Boss Germ Troop': 90,
+  'Boss Fly Troop': 112,
+  'Boss Paper Troop': 76,
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -25,7 +36,18 @@ function targetBossHp(bossTier: number) {
   return Math.round(165 + bossTier * 38 + Math.max(0, bossTier - 1) ** 2 * 10);
 }
 
-function tuneBossDifficulty(enemy: MaybeBoss) {
+function tuneNormalEnemySpeed(enemy: MaybeEnemy) {
+  if (!enemy || enemy.isBoss === true || typeof enemy.speed !== 'number') return;
+
+  const speedCap = typeof enemy.name === 'string' ? NORMAL_ENEMY_SPEED_CAPS[enemy.name] : undefined;
+  if (typeof speedCap === 'number') {
+    enemy.speed = Math.min(enemy.speed, speedCap);
+  } else {
+    enemy.speed = Math.min(enemy.speed, 118);
+  }
+}
+
+function tuneBossDifficulty(enemy: MaybeEnemy) {
   if (!enemy || enemy.isBoss !== true) return;
 
   const bossWave = typeof enemy.bossWave === 'number' ? enemy.bossWave : 5;
@@ -54,15 +76,21 @@ function tuneBossDifficulty(enemy: MaybeBoss) {
   }
 }
 
+function tuneEnemy(item: unknown) {
+  if (!item || typeof item !== 'object') return;
+
+  const enemy = item as MaybeEnemy;
+  tuneNormalEnemySpeed(enemy);
+  tuneBossDifficulty(enemy);
+}
+
 export default function SimplifiedGameAreaV9(props: GameAreaV8Props) {
   useEffect(() => {
     const originalPush = Array.prototype.push;
 
     Array.prototype.push = function bossDifficultyPush(...items: unknown[]) {
       for (const item of items) {
-        if (item && typeof item === 'object') {
-          tuneBossDifficulty(item as MaybeBoss);
-        }
+        tuneEnemy(item);
       }
       return originalPush.apply(this, items);
     };
