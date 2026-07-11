@@ -19,6 +19,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function targetBossHp(bossTier: number) {
+  // The core engine spawns bosses too tanky for early strong-toilet builds.
+  // Keep bosses meaningful, but make them beatable since they also summon troops.
+  return Math.round(165 + bossTier * 38 + Math.max(0, bossTier - 1) ** 2 * 10);
+}
+
 function tuneBossDifficulty(enemy: MaybeBoss) {
   if (!enemy || enemy.isBoss !== true) return;
 
@@ -30,10 +36,10 @@ function tuneBossDifficulty(enemy: MaybeBoss) {
     enemy.speed = clamp(Math.round(34 + bossTier * 2), 34, 56);
   }
 
-  // Keep bosses beatable now that they summon troops; scaling should be lighter.
-  const hpBonus = Math.round(bossTier * 30 + Math.max(0, bossTier - 1) ** 2 * 6);
-  if (typeof enemy.maxHp === 'number') enemy.maxHp += hpBonus;
-  if (typeof enemy.hp === 'number') enemy.hp += hpBonus;
+  // Force boss HP down instead of adding more HP on top of the core engine's scaling.
+  const scaledHp = targetBossHp(bossTier);
+  if (typeof enemy.maxHp === 'number') enemy.maxHp = Math.min(enemy.maxHp, scaledHp);
+  if (typeof enemy.hp === 'number') enemy.hp = Math.min(enemy.hp, scaledHp);
 
   if (typeof enemy.size === 'number') {
     enemy.size = clamp(Math.round(enemy.size + bossTier * 1.5), enemy.size, 82);
