@@ -7,32 +7,62 @@ type MaybeBoss = {
   isBoss?: boolean;
   bossWave?: number;
   speed?: number;
+  hp?: number;
+  maxHp?: number;
+  size?: number;
+  scoreValue?: number;
+  coinDrop?: number;
   name?: string;
 };
 
-function boostBossSpeed(enemy: MaybeBoss) {
-  if (!enemy || enemy.isBoss !== true || typeof enemy.speed !== 'number') return;
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function tuneBossDifficulty(enemy: MaybeBoss) {
+  if (!enemy || enemy.isBoss !== true) return;
+
   const bossWave = typeof enemy.bossWave === 'number' ? enemy.bossWave : 5;
-  const waveBonus = Math.max(0, bossWave) * 5;
-  const milestoneBonus = Math.floor(Math.max(0, bossWave) / 5) * 8;
-  enemy.speed = Math.min(240, Math.round(enemy.speed + waveBonus + milestoneBonus));
+  const bossTier = Math.max(1, Math.floor(bossWave / 5));
+
+  // Bosses should feel heavy, not fast. Later waves get only tiny speed bumps.
+  if (typeof enemy.speed === 'number') {
+    enemy.speed = clamp(Math.round(36 + bossTier * 3), 38, 70);
+  }
+
+  // Difficulty scales through tankiness and physical threat instead of chase speed.
+  const hpBonus = Math.round(bossTier * 85 + Math.max(0, bossTier - 1) ** 2 * 22);
+  if (typeof enemy.maxHp === 'number') enemy.maxHp += hpBonus;
+  if (typeof enemy.hp === 'number') enemy.hp += hpBonus;
+
+  if (typeof enemy.size === 'number') {
+    enemy.size = clamp(Math.round(enemy.size + bossTier * 2.5), enemy.size, 92);
+  }
+
+  if (typeof enemy.scoreValue === 'number') {
+    enemy.scoreValue += bossTier * 3;
+  }
+
+  if (typeof enemy.coinDrop === 'number') {
+    enemy.coinDrop = clamp(enemy.coinDrop + bossTier * 2, enemy.coinDrop, 60);
+  }
 }
 
 export default function SimplifiedGameAreaV9(props: GameAreaV8Props) {
   useEffect(() => {
     const originalPush = Array.prototype.push;
 
-    Array.prototype.push = function bossSpeedPush(...items: unknown[]) {
+    Array.prototype.push = function bossDifficultyPush(...items: unknown[]) {
       for (const item of items) {
         if (item && typeof item === 'object') {
-          boostBossSpeed(item as MaybeBoss);
+          tuneBossDifficulty(item as MaybeBoss);
         }
       }
       return originalPush.apply(this, items);
     };
 
     return () => {
-      if (Array.prototype.push.name === 'bossSpeedPush') {
+      if (Array.prototype.push.name === 'bossDifficultyPush') {
         Array.prototype.push = originalPush;
       }
     };
