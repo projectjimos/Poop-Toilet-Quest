@@ -21,6 +21,16 @@ type EnemyLike = {
   lastSummonMs?: number;
 };
 
+type CoinLike = {
+  id?: string;
+  x?: number;
+  y?: number;
+  value?: number;
+  size?: number;
+  wobble?: number;
+  spawnedAtMs?: number;
+};
+
 type RuntimeLike = {
   active?: boolean;
   wave?: number;
@@ -31,7 +41,7 @@ type RuntimeLike = {
     y?: number;
   };
   enemies?: EnemyLike[];
-  coins?: unknown[];
+  coins?: CoinLike[];
 };
 
 const WORLD_SIZE = 1500;
@@ -40,6 +50,8 @@ const MAX_PLAYER_SPEED = 430;
 const GAMEPLAY_TUNE_INTERVAL_MS = 250;
 const DEFAULT_BOSS_SUMMON_INTERVAL_MS = 5000;
 const FASTEST_BOSS_SUMMON_INTERVAL_MS = 900;
+const NORMAL_COIN_DESPAWN_MS = 22000;
+const BIG_COIN_DESPAWN_MS = 32000;
 
 const SUMMON_TROOPS = [
   { emoji: '🦠', name: 'Boss Germ Troop', hp: 18, speed: 76, size: 25, scoreValue: 1, coinDrop: 1 },
@@ -79,6 +91,10 @@ function maxSummonedTroops(tier: number) {
 
 function slowBossSpeed(tier: number) {
   return clamp(28 + tier * 2, 28, 48);
+}
+
+function coinLifetimeMs(coin: CoinLike) {
+  return typeof coin.value === 'number' && coin.value > 1 ? BIG_COIN_DESPAWN_MS : NORMAL_COIN_DESPAWN_MS;
 }
 
 function makeSummonedTroop(boss: EnemyLike, tier: number): EnemyLike {
@@ -127,6 +143,21 @@ function tuneBossSummons(runtime: RuntimeLike, now = performance.now()) {
 
   boss.lastSummonMs = now;
   runtime.enemies.push(makeSummonedTroop(boss, tier));
+}
+
+function tuneCoinDespawns(runtime: RuntimeLike, now = performance.now()) {
+  if (!runtime.active || !Array.isArray(runtime.coins)) return;
+
+  runtime.coins = runtime.coins.filter((coin) => {
+    if (!coin || typeof coin !== 'object') return false;
+
+    if (typeof coin.spawnedAtMs !== 'number') {
+      coin.spawnedAtMs = now;
+      return true;
+    }
+
+    return now - coin.spawnedAtMs < coinLifetimeMs(coin);
+  });
 }
 
 function isRuntimeLike(value: unknown): value is RuntimeLike {
@@ -191,6 +222,7 @@ function tuneRuntime(playerSpeed: number) {
 
   runtime.player.speed = playerSpeed;
   tuneBossSummons(runtime);
+  tuneCoinDespawns(runtime);
   return true;
 }
 
