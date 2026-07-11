@@ -55,6 +55,7 @@ type GoalState = {
   killCredits: number;
   unlockedSkins: string[];
   activeSkinId: string;
+  goalNumber: number;
 };
 
 function getActiveProfile(): string | null {
@@ -89,30 +90,38 @@ function readStringArray(key: string, fallback: string[]): string[] {
   }
 }
 
+function createGoalOneState(profile: string | null = getActiveProfile()): GoalState {
+  return {
+    profile,
+    coins: 0,
+    unlockedToilets: [STARTING_TOILET_ID],
+    activeToiletId: STARTING_TOILET_ID,
+    killCredits: 0,
+    unlockedSkins: [DEFAULT_SKIN_ID],
+    activeSkinId: DEFAULT_SKIN_ID,
+    goalNumber: 1,
+  };
+}
+
 function readGoalState(): GoalState {
   const profile = getActiveProfile();
-  if (!profile) {
-    return {
-      profile: null,
-      coins: 0,
-      unlockedToilets: [STARTING_TOILET_ID],
-      activeToiletId: STARTING_TOILET_ID,
-      killCredits: 0,
-      unlockedSkins: [DEFAULT_SKIN_ID],
-      activeSkinId: DEFAULT_SKIN_ID,
-    };
-  }
+  if (!profile) return createGoalOneState(null);
 
   const key = profileKey(profile);
+  const coins = readNumber(`poop_quest_coins_${key}`, 0);
+  const unlockedToilets = readStringArray(`poop_quest_unlocked_${key}`, [STARTING_TOILET_ID]);
+  const killCredits = readNumber(`poop_quest_kill_credits_${key}`, 0);
+  const unlockedSkins = readStringArray(`poop_quest_unlocked_skins_${key}`, [DEFAULT_SKIN_ID]);
 
   return {
     profile,
-    coins: readNumber(`poop_quest_coins_${key}`, 0),
-    unlockedToilets: readStringArray(`poop_quest_unlocked_${key}`, [STARTING_TOILET_ID]),
+    coins,
+    unlockedToilets,
     activeToiletId: readString(`poop_quest_active_id_${key}`, STARTING_TOILET_ID),
-    killCredits: readNumber(`poop_quest_kill_credits_${key}`, 0),
-    unlockedSkins: readStringArray(`poop_quest_unlocked_skins_${key}`, [DEFAULT_SKIN_ID]),
+    killCredits,
+    unlockedSkins,
     activeSkinId: readString(`poop_quest_active_skin_${key}`, DEFAULT_SKIN_ID),
+    goalNumber: calculateGoalNumber(coins, unlockedToilets, killCredits, unlockedSkins),
   };
 }
 
@@ -136,6 +145,18 @@ function nextLockedVisibleToilet(unlockedToilets: string[]): Toilet | undefined 
 
 function nextLockedSkin(unlockedSkins: string[]) {
   return SKIN_GOALS.find((skin) => !unlockedSkins.includes(skin.id));
+}
+
+function calculateGoalNumber(coins: number, unlockedToilets: string[], killCredits: number, unlockedSkins: string[]): number {
+  const nextToilet = nextLockedVisibleToilet(unlockedToilets);
+  const nextSkin = nextLockedSkin(unlockedSkins);
+
+  if (unlockedToilets.length <= 1 && coins === 0 && killCredits === 0) return 1;
+  if (nextToilet && coins < nextToilet.cost) return 1;
+  if (nextToilet && coins >= nextToilet.cost) return 2;
+  if (nextSkin && killCredits < nextSkin.cost) return 3;
+  if (nextSkin && killCredits >= nextSkin.cost) return 4;
+  return 5;
 }
 
 function getNextGoal(state: GoalState): string {
@@ -346,7 +367,8 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
     const resetGoalHelper = () => {
       localStorage.removeItem(GOAL_DISMISSED_KEY);
       setIsGoalDismissed(false);
-      syncGoalState();
+      setGoalState(createGoalOneState());
+      window.setTimeout(() => setGoalState(createGoalOneState()), 0);
     };
 
     syncGoalState();
@@ -383,7 +405,7 @@ export default function GameQualityGuard({ children }: { children: ReactNode }) 
         <aside className="pointer-events-none fixed left-4 top-20 z-[55] w-[min(90vw,360px)] rounded-2xl border border-amber-400/30 bg-slate-950/90 p-4 font-mono text-slate-100 shadow-2xl shadow-amber-950/30 backdrop-blur-md">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Next Goal</div>
+              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">Goal #{goalState.goalNumber}</div>
               <p className="mt-1 text-sm font-black leading-snug text-white">{nextGoal}</p>
               <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 Coins {goalState.coins} · Kills {goalState.killCredits}
