@@ -1,2 +1,2 @@
-// Active simplified engine with scaled enemy coin drops, timed coin despawn cleanup, less-generous coin chest rewards, capped normal enemy speed and health, sprinkles vanilla ice cream arena-flush skin, player flush cooldown bar, pause support, boss waves, kill-based fruit skins with passive perks, custom fruit rendering, slow tanky summoning bosses, expanded toilet shop, and toilet-based player speed.
-export { default } from './SimplifiedGameAreaV13';
+// Active simplified engine with scaled enemy coin drops, timed coin despawn cleanup, less-generous coin chest rewards, capped normal enemy speed and health, 100-kill sprinkles vanilla ice cream arena-flush skin, player flush cooldown bar, pause support, boss waves, kill-based fruit skins with passive perks, custom fruit rendering, slow tanky summoning bosses, expanded toilet shop, and toilet-based player speed.
+export { default } from './SimplifiedGameAreaV14';
